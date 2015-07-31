@@ -190,7 +190,7 @@ type
     procedure CleanMemFlash;
     //métodos para codificar programas
     procedure codAsm(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);  //codifica una instrucción ASM simplificada
-    procedure codAsm(const inst: TPIC16Inst; const f, b: byte);
+    procedure codAsm(const inst: TPIC16Inst; const f: byte; b: byte);
     procedure codAsm(const inst: TPIC16Inst; const k: word);
     procedure codAsm(const inst: TPIC16Inst);
     procedure GenHex(hexFile: string);  //genera un archivo hex
@@ -439,7 +439,7 @@ begin
   flashUsed[iFlash] := true;  //marca como usado
   inc(iFlash);
 end;
-procedure TPIC16.codAsm(const inst: TPIC16Inst; const f, b: byte);
+procedure TPIC16.codAsm(const inst: TPIC16Inst; const f: byte; b: byte);
 //Codifica las instrucciones orientadas a bit.
 begin
   case inst of
