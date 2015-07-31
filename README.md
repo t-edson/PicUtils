@@ -10,7 +10,7 @@ Se define un objeto que representa a un PIC de esta serie, que está dimensionad
 
 El objetivo de esta unidad es poder servir como base para la implementación de ensambladores, compiladores o hasta simuladores.
 
-## Funcioanlidades
+## Funcionalidades
 
 * Modela la arquitectura de hardware de un PIC.
 * Permite codificar y decodificar las instrucciones del microcontrolador.
