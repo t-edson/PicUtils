@@ -40,6 +40,11 @@ var
 begin
   Result := true;
   lin := trim(lin);    //trim
+  if lin='' then begin
+    Application.MessageBox('Expected identifier.','');
+    Result := false;
+    exit;
+  end;
   tmp := '';
   i:=1;
   while lin[i] in ['a'..'z','A'..'Z'] do begin
@@ -58,6 +63,11 @@ var
 begin
   Result := true;
   lin := trim(lin);    //trim
+  if lin='' then begin
+    Application.MessageBox('Expected number.','');
+    Result := false;
+    exit;
+  end;
   tmp := '';
   i:=1;
   while lin[i] in ['0'..'9','x','X'] do begin
