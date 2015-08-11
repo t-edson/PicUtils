@@ -104,31 +104,22 @@ var
   l: String;
   idInst: TPIC16Inst;
   Inst: String;
-  found: Boolean;
   stx: String;
   f, k, b: word;
 begin
-  pic.CleanMemFlash;
   pic.iFlash:=0;      //for start to code at $0000
   for l in Memo1.Lines do begin
+    if trim(l) = '' then continue;
     if not ExtractString(l, Inst) then begin  //extract mnemonic
       Application.MessageBox('Syntax Error','');
       exit;
     end;
-    //find mnemonic
-    found := false;
-    for idInst := low(TPIC16Inst) to high(TPIC16Inst) do begin
-      if PIC16InstName[idInst] = UpperCase(Inst) then begin
-        found := true;
-        break;
-      end;
-    end;
-    if not found then begin
+    //find mnemonic, and syntax
+    idInst := pic.FindOpcode(Inst, stx);
+    if idInst = _Inval then begin
       Application.MessageBox(PChar('Invalid Opcode: '+ Inst),'');
       exit;
     end;
-    //Found. Load syntax
-    stx := PIC16InstSyntax[idInst];
     case stx of
     'fd': begin
        if not ExtractNumber(l,f) then exit;

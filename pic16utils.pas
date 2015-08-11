@@ -1,4 +1,24 @@
-{
+{PIC16 16Utils 0.2
+Cambios
+=======
+* Se corrige un error en la codificación y decodificación de las instrucciones BSF, BTFSC
+Y BTFSS
+* Se corrige un error de decodificación de algunas instrucciones.
+* Se crea el tipo TPIC16FlashCell, para representar a las celdas de memoria Flash, y
+se elimina TPIC16FlashBool, pues ya no es necesario. Se adapta el código a la nueva.
+* Se agrega a TPIC16FlashCell, un campo para incuir comentarios en el código.
+estructura.
+* Se crea el tipo TPIC16RamCell, para representar a las celdas de memoria RAM.
+* Se crea el método TPIC16.putCommAsm((), para permitir agregar un comentario al
+código de la memoria flash.
+* Se modifica TPIC16.ShowCode(), para que muestre los coemnatrios al volcar el código.
+* Se agrega el campo "frequen", para poder disponer de la frecuencia de reloj.
+* Se corrige HaveConsecGPR().
+* Se agrega el método FindOpcode().
+* Se cambia los nombres de los métodos CleanMemRAM y CleanMemFlash;
+
+ Descripción
+ ===========
  Unidad con utilidades para la programación de microcontroladores PIC de rango
  medio con instrucciones de 14 bits. Incluye a la mayoría de la serie
  PIC16FXXXX.
@@ -71,10 +91,13 @@ type  //tipos para instrucciones
 
 
 type //Modelo de la memoria RAM
-  TPIC16Ram = array[0..PIC_MAX_RAM-1] of byte;
-  TPIC16RamBool = array[0..PIC_MAX_RAM-1] of boolean;
+  TPIC16RamCell = record
+    value  : byte;     //value of the memory
+    used   : boolean;  //indicate if have been written
+    name   : string;   //nombre del registro
+  end;
+  TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
   ptrPIC16Ram = ^TPIC16Ram;
-  ptrPIC16RamBool = ^TPIC16RamBool;
 
   {Representa a un banco de memoria del PIC. En un banco las direcciones de memoria
    se mapean siempre desde $00 hasta $7F. No almacenan datos, solo usan referencias.}
@@ -82,20 +105,15 @@ type //Modelo de la memoria RAM
   { TRAMBank }
   TRAMBank = object
      ram    : ptrPIC16Ram;     //puntero a memoria RAM
-     ramUsed: ptrPIC16RamBool; //puntero a memoria RAM ocupada
      AddrStart: word;          //dirección de inicio en la memoria RAM total
      LastMapped: boolean;      //indica si los últimos bytes están mapeados
      BankMapped: ptrRAMBank;   //banco al que están mapeados los últimos bytes
   private
-    function Getmem(i : byte): byte;
-    function GetmemUsed(i : byte): boolean;
-    procedure Setmem(i : byte; AValue: byte);
-    procedure SetmemUsed(i : byte; AValue: boolean);
+    function Getmem(i : byte): TPIC16RamCell;
+    procedure Setmem(i : byte; AValue: TPIC16RamCell);
   public
-    procedure Init(AddrStart0: word; BankMapped0: ptrRAMBank;
-         ram0:ptrPIC16Ram; ramUsed0: ptrPIC16RamBool);  //inicia objeto
-    property mem[i : byte] : byte read Getmem write Setmem;
-    property memUsed[i : byte] : boolean read GetmemUsed write SetmemUsed;
+    procedure Init(AddrStart0: word; BankMapped0: ptrRAMBank; ram0:ptrPIC16Ram);  //inicia objeto
+    property mem[i : byte] : TPIC16RamCell read Getmem write Setmem;
     //funciones para administración de la memoria
     function HaveConsecGPR(const i, n: byte): boolean; //Indica si hay "n" bytes libres
     procedure UseConsecGPR(const i, n: byte);  //Ocupa "n" bytes en la posición "i"
@@ -105,10 +123,14 @@ type //Modelo de la memoria RAM
   end;
 
 type  //Modelos de la memoria Flash
-  TPIC16Flash = array[0..PIC_MAX_FLASH-1] of word;
-  TPIC16FlashBool = array[0..PIC_MAX_FLASH-1] of boolean;
+  TPIC16FlashCell = record
+    value  : word;     //value of the memory
+    used   : boolean;  //indicate if have been written
+    comment: string;   //comment to code
+    {tener cuidado con el tamaño de este registro, pues se va a multiplicar por 8192}
+  end;
+  TPIC16Flash = array[0..PIC_MAX_FLASH-1] of TPIC16FlashCell;
   ptrPIC16Flash = ^TPIC16Flash;
-  ptrPIC16FlashBool = ^TPIC16FlashBool;
 
   {Representa a una página de memoria del PIC. En una página las direcciones de memoria
    se mapean siempre desde $000 hasta $800. No almacenan datos, solo usan referencias.}
@@ -116,22 +138,17 @@ type  //Modelos de la memoria Flash
   { TFlashPage }
   TFlashPage = object
   private
-    flash    : ptrPIC16Flash;     //puntero a memoria Flash
-    flashUsed: ptrPIC16FlashBool; //puntero a memoria Flash ocupada
-    AddrStart: word;             //dirección de inicio en la memoria flash total
+    flash    : ptrPIC16Flash;  //puntero a memoria Flash
+    AddrStart: word;           //dirección de inicio en la memoria flash total
   private
     iHex : word;  //índice para exploración de memoria
     nUsed: word;  //número de celdas usdas
-    function Getmem(i : word): word;
-    function GetmemUsed(i : word): boolean;
-    procedure Setmem(i : word; AValue: word);
-    procedure SetmemUsed(i : word; AValue: boolean);
+    function Getmem(i : word): TPIC16FlashCell;
+    procedure Setmem(i : word; AValue: TPIC16FlashCell);
   public
     minUsed, maxUsed: word;  //información útil, por eso se publica
-    procedure Init(AddrStart0: word; flash0: ptrPIC16Flash;
-      flashUsed0: ptrPIC16FlashBool);  //inicia objeto
-    property mem[i : word] : word read Getmem write Setmem;
-    property memUsed[i : word] : boolean read GetmemUsed write SetmemUsed;
+    procedure Init(AddrStart0: word; flash0: ptrPIC16Flash);  //inicia objeto
+    property mem[i : word] : TPIC16FlashCell read Getmem write Setmem;
     //funciones para administración de la memoria
     function Total: word; //total de bytes que contiene
     function Used: word;  //total de bytes usados por el usuario
@@ -148,9 +165,7 @@ type
     hexLines : TStringList; //usado para crear archivo *.hex
     //memorias
     flash    : TPIC16Flash;     //memoria Flash
-    flashUsed: TPIC16FlashBool; //memoria Flash usada
     ram      : TPIC16Ram;      //memoria RAM
-    ramUsed  : TPIC16RamBool;  //espejo de RAM para marcar posiciones ocupadas
     bank0, bank1, bank2, bank3: TRAMBank;  //bancos de memoria RAM
     page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
     procedure GenHexComm(comment: string);
@@ -173,7 +188,8 @@ type
     procedure Decode(const opCode: word);  //decodifica instrucción
     function Disassembler: string;      //Desensambla la instrucción actual
   public
-    iFlash   : integer;     //puntero a la memoria Flash, para escribir
+    iFlash   : integer;   //puntero a la memoria Flash, para escribir
+    frequen  : integer;   //frecuencia del reloj
     //Propiedades que definen la arquitectura del PIC destino.
     NumBanks: byte;      //Número de bancos de RAM.
     NumPages: byte;      //Número de páginas de memoria Flash.
@@ -184,16 +200,20 @@ type
     function FreeMemRAM(const size: integer; var addr: word): boolean;  //libera una dirección usada
     function TotalMemRAM: word;  //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
-    procedure CleanMemRAM;
+    procedure ClearMemRAM;
     //funciones para la memoria Flash
     function TotalMemFlash: word;  //devuelve el total de memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
-    procedure CleanMemFlash;
+    procedure ClearMemFlash;
     //métodos para codificar programas
     procedure codAsm(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);  //codifica una instrucción ASM simplificada
     procedure codAsm(const inst: TPIC16Inst; const f: byte; b: byte);
     procedure codAsm(const inst: TPIC16Inst; const k: word);
     procedure codAsm(const inst: TPIC16Inst);
+    //métodos adicionales
+    function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
+    procedure addCommAsm(comm: string);  //Add a comment to the ASM code
+    procedure addCommAsm1(comm: string); //Add lateral comment to the ASM code
     procedure GenHex(hexFile: string);  //genera un archivo hex
     procedure DumpCode(l: TStrings);  //vuelva en código que contiene
   public
@@ -205,11 +225,11 @@ var  //variables globales
   //mnemónico de las instrucciones
   PIC16InstName: array[low(TPIC16Inst)..high(TPIC16Inst)] of string[7];
   //sintaxis en ensamblador de las instrucciones
-  PIC16InstSyntax: array[low(TPIC16Inst)..high(TPIC16Inst)] of string[3];
+  PIC16InstSyntax: array[low(TPIC16Inst)..high(TPIC16Inst)] of string[5];
 
 implementation
 { TRAMBank }
-function TRAMBank.Getmem(i: byte): byte;
+function TRAMBank.Getmem(i: byte): TPIC16RamCell;
 begin
   //Se asume que i debe ser menor que $7F
   if (i>=$70) and LastMapped then begin
@@ -219,17 +239,7 @@ begin
     Result := ram^[i+AddrStart];
   end;
 end;
-function TRAMBank.GetmemUsed(i : byte): boolean;
-begin
-  //Se asume que i debe ser menor que $7F
-  if (i>=$70) and LastMapped then begin
-    //estas direcciones están mapeadas en otro banco
-    Result := BankMapped^.memUsed[i];
-  end else begin
-    Result := ramUsed^[i+AddrStart];
-  end;
-end;
-procedure TRAMBank.Setmem(i: byte; AValue: byte);
+procedure TRAMBank.Setmem(i: byte; AValue: TPIC16RamCell);
 begin
   if (i>=$70) and LastMapped then begin
     //estas direcciones están mapeadas en otro banco
@@ -238,34 +248,28 @@ begin
     ram^[i+AddrStart] := AValue;
   end;
 end;
-procedure TRAMBank.SetmemUsed(i : byte; AValue: boolean);
-begin
-  if (i>=$70) and LastMapped then begin
-    //estas direcciones están mapeadas en otro banco
-    BankMapped^.memUsed[i] := AValue;
-  end else begin
-    ramUsed^[i+AddrStart] := AValue;
-  end;
-end;
 procedure TRAMBank.Init(AddrStart0: word; BankMapped0: ptrRAMBank;
-  ram0: ptrPIC16Ram; ramUsed0: ptrPIC16RamBool);
+  ram0: ptrPIC16Ram);
 begin
   AddrStart :=AddrStart0;
   BankMapped:=BankMapped0;
   ram       :=ram0;
-  ramUsed   :=ramUsed0;
 end;
 function TRAMBank.HaveConsecGPR(const i, n: byte): boolean;
 {Indica si hay "n" bytes consecutivos libres en la posicióm "i", en este banco de la RAM}
 var
   c: Integer;
+  j: Byte;
 begin
   Result := false;
   c := 0;
-  while (i<=$7F) and (c<n) do begin
-    if memUsed[i] then exit;  //ya está ocupado
+  j := i;
+  while (j<=$7F) and (c<n) do begin
+    if mem[j].used then exit;  //ya está ocupado
     inc(c);      //verifica siguiente
+    inc(j);
   end;
+  if j>$7F then exit;  //no hay más espacio
   //si llega aquí es porque estaban libres los bloques
   Result := true;
 end;
@@ -275,8 +279,10 @@ procedure TRAMBank.UseConsecGPR(const i, n: byte);
  se hará ninguan verificación.}
 var j: byte;
 begin
-  for j:=i to i+n-1 do
-    memUsed[j] := true;
+  for j:=i to i+n-1 do begin
+    ram^[i+AddrStart].used:=true;
+    //    mem[j].used := true;   //no se puede
+  end;
 end;
 function TRAMBank.GetMemRAM(const size: integer; var addr: word): boolean;
 {Busca un bloque de bytes consecutivs de memoria RAM en este banco.}
@@ -310,39 +316,28 @@ begin
   Result := 0;
   if LastMapped then begin //últimos bytes maperados
     for i:=$20 to $6F do begin
-      if memUsed[i] then inc(Result);
+      if mem[i].used then inc(Result);
     end;
   end else begin //bancos independientes
     for i:=$20 to $7F do begin
-      if memUsed[i] then inc(Result);
+      if mem[i].used then inc(Result);
     end;
   end;
 end;
 { TFlashPage }
-function TFlashPage.Getmem(i: word): word;
+function TFlashPage.Getmem(i: word): TPIC16FlashCell;
 begin
   //Se asume que i debe ser menor que $800
   Result := flash^[i+AddrStart];
 end;
-function TFlashPage.GetmemUsed(i: word): boolean;
-begin
-  //Se asume que i debe ser menor que $800
-  Result := flashUsed^[i+AddrStart];
-end;
-procedure TFlashPage.Setmem(i: word; AValue: word);
+procedure TFlashPage.Setmem(i: word; AValue: TPIC16FlashCell);
 begin
   flash^[i+AddrStart] := AValue;
 end;
-procedure TFlashPage.SetmemUsed(i: word; AValue: boolean);
-begin
-  flashUsed^[i+AddrStart] := AValue;
-end;
-procedure TFlashPage.Init(AddrStart0: word;
-  flash0: ptrPIC16Flash; flashUsed0: ptrPIC16FlashBool);
+procedure TFlashPage.Init(AddrStart0: word; flash0: ptrPIC16Flash);
 begin
   AddrStart :=AddrStart0;
   flash     :=flash0;
-  flashUsed :=flashUsed0;
 end;
 function TFlashPage.Total: word;
 begin
@@ -354,7 +349,7 @@ var
 begin
   Result := 0;
   for i:=$0000 to PIC_PAGE_SIZE-1 do begin
-    if memUsed[i] then inc(Result);
+    if mem[i].used then inc(Result);
   end;
 end;
 procedure TFlashPage.StartHex;
@@ -373,7 +368,7 @@ begin
   maxUsed := $0000;  //valor máximo
   nUsed := 0;  //aprovecha para calcular elementos usados
   for i:=$0000 to PIC_PAGE_SIZE-1 do begin
-    if memUsed[i] then begin
+    if mem[i].used then begin
       if i<minUsed then minUsed := i;
       if i>maxUsed then maxUsed := i;
       inc(nUsed);
@@ -406,7 +401,7 @@ begin
   Addr := iHex + AddrStart;
   nInst := 0;
   while (iHex<=maxUsed) and (nInst<MAX_INS_HEX) do begin
-    tmp := IntToHex(mem[iHex],4);
+    tmp := IntToHex(mem[iHex].value,4);
     Result +=copy(tmp,3,2) + copy(tmp,1,2);  //se graba con los bytes invertidos
     Inc(iHex);  //pasa al siguiente
     Inc(nInst);
@@ -418,40 +413,40 @@ procedure TPIC16.codAsm(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
 //Codifica las instrucciones orientadas a registro.
 begin
   case inst of
-  ADDWF : flash[iFlash] := %00011100000000 + ord(d) + f;
-  ANDWF : flash[iFlash] := %00011100000000 + ord(d) + f;
-  CLRF  : flash[iFlash] := %00000110000000 + f;
-  COMF  : flash[iFlash] := %00100100000000 + ord(d) + f;
-  DECF  : flash[iFlash] := %00001100000000 + ord(d) + f;
-  DECFSZ: flash[iFlash] := %00101100000000 + ord(d) + f;
-  INCF  : flash[iFlash] := %00101000000000 + ord(d) + f;
-  INCFSZ: flash[iFlash] := %00111100000000 + ord(d) + f;
-  IORWF : flash[iFlash] := %00010000000000 + ord(d) + f;
-  MOVF  : flash[iFlash] := %00100000000000 + ord(d) + f;
-  MOVWF : flash[iFlash] := %00000010000000 + f;
-  RLF   : flash[iFlash] := %00110100000000 + ord(d) + f;
-  RRF   : flash[iFlash] := %00110000000000 + ord(d) + f;
-  SUBWF : flash[iFlash] := %00001000000000 + ord(d) + f;
-  SWAPF : flash[iFlash] := %00111000000000 + ord(d) + f;
-  XORWF : flash[iFlash] := %00011000000000 + ord(d) + f;
+  ADDWF : flash[iFlash].value := %00011100000000 + ord(d) + f;
+  ANDWF : flash[iFlash].value := %00011100000000 + ord(d) + f;
+  CLRF  : flash[iFlash].value := %00000110000000 + f;
+  COMF  : flash[iFlash].value := %00100100000000 + ord(d) + f;
+  DECF  : flash[iFlash].value := %00001100000000 + ord(d) + f;
+  DECFSZ: flash[iFlash].value := %00101100000000 + ord(d) + f;
+  INCF  : flash[iFlash].value := %00101000000000 + ord(d) + f;
+  INCFSZ: flash[iFlash].value := %00111100000000 + ord(d) + f;
+  IORWF : flash[iFlash].value := %00010000000000 + ord(d) + f;
+  MOVF  : flash[iFlash].value := %00100000000000 + ord(d) + f;
+  MOVWF : flash[iFlash].value := %00000010000000 + f;
+  RLF   : flash[iFlash].value := %00110100000000 + ord(d) + f;
+  RRF   : flash[iFlash].value := %00110000000000 + ord(d) + f;
+  SUBWF : flash[iFlash].value := %00001000000000 + ord(d) + f;
+  SWAPF : flash[iFlash].value := %00111000000000 + ord(d) + f;
+  XORWF : flash[iFlash].value := %00011000000000 + ord(d) + f;
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flashUsed[iFlash] := true;  //marca como usado
+  flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
 procedure TPIC16.codAsm(const inst: TPIC16Inst; const f: byte; b: byte);
 //Codifica las instrucciones orientadas a bit.
 begin
   case inst of
-  BCF  : flash[iFlash] := %01000000000000 + (b<<7) + f;
-  BSF  : flash[iFlash] := %01101000000000 + (b<<7) + f;
-  BTFSC: flash[iFlash] := %01110000000000 + (b<<7) + f;
-  BTFSS: flash[iFlash] := %01111000000000 + (b<<7) + f;
+  BCF  : flash[iFlash].value := %01000000000000 + (b<<7) + f;
+  BSF  : flash[iFlash].value := %01010000000000 + (b<<7) + f;
+  BTFSC: flash[iFlash].value := %01100000000000 + (b<<7) + f;
+  BTFSS: flash[iFlash].value := %01110000000000 + (b<<7) + f;
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flashUsed[iFlash] := true;  //marca como usado
+  flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
 procedure TPIC16.codAsm(const inst: TPIC16Inst; const k: word);
@@ -459,37 +454,75 @@ procedure TPIC16.codAsm(const inst: TPIC16Inst; const k: word);
  "k" debe ser word, porque en la instrucción GOTO, requiere 11 bits.}
 begin
   case inst of
-  ADDLW : flash[iFlash] := %11111000000000 + k;
-  ANDLW : flash[iFlash] := %11100100000000 + k;
-  CALL  : flash[iFlash] := %10000000000000 + k;
-  GOTO_ : flash[iFlash] := %10100000000000 + k;
-  IORLW : flash[iFlash] := %11100000000000 + k;
-  MOVLW : flash[iFlash] := %11000000000000 + k;
-  RETLW : flash[iFlash] := %11010000000000 + k;
-  SUBLW : flash[iFlash] := %11110000000000 + k;
-  XORLW : flash[iFlash] := %11101000000000 + k;
+  ADDLW : flash[iFlash].value := %11111000000000 + k;
+  ANDLW : flash[iFlash].value := %11100100000000 + k;
+  CALL  : flash[iFlash].value := %10000000000000 + k;
+  GOTO_ : flash[iFlash].value := %10100000000000 + k;
+  IORLW : flash[iFlash].value := %11100000000000 + k;
+  MOVLW : flash[iFlash].value := %11000000000000 + k;
+  RETLW : flash[iFlash].value := %11010000000000 + k;
+  SUBLW : flash[iFlash].value := %11110000000000 + k;
+  XORLW : flash[iFlash].value := %11101000000000 + k;
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flashUsed[iFlash] := true;  //marca como usado
+  flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
 procedure TPIC16.codAsm(const inst: TPIC16Inst);
 //Codifica las instrucciones de control.
 begin
   case inst of
-  CLRW  : flash[iFlash] := %00000110000000;
-  NOP   : flash[iFlash] := %00000000000000;
-  CLRWDT: flash[iFlash] := %00000001100100;
-  RETFIE: flash[iFlash] := %00000000001001;
-  RETURN: flash[iFlash] := %00000000001000;
-  SLEEP : flash[iFlash] := %00000001100011;
+  CLRW  : flash[iFlash].value := %00000110000000;
+  NOP   : flash[iFlash].value := %00000000000000;
+  CLRWDT: flash[iFlash].value := %00000001100100;
+  RETFIE: flash[iFlash].value := %00000000001001;
+  RETURN: flash[iFlash].value := %00000000001000;
+  SLEEP : flash[iFlash].value := %00000001100011;
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flashUsed[iFlash] := true;  //marca como usado
+  flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
+
+function TPIC16.FindOpcode(Op: string; var syntax: string): TPIC16Inst;
+{Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
+ el identificador de instrucción y una cadena que representa a la sintaxis en "syntax".
+ Si no encuentra devuelve "_Inval". }
+var
+  idInst: TPIC16Inst;
+  tmp: String;
+  found: Boolean;
+begin
+  found := false;
+  tmp := UpperCase(Op);
+  for idInst := low(TPIC16Inst) to high(TPIC16Inst) do begin
+    if PIC16InstName[idInst] = tmp then begin
+      found := true;
+      break;
+    end;
+  end;
+  if found then begin
+    Result := idInst;
+    syntax := PIC16InstSyntax[idInst];
+  end else  begin
+    Result := _Inval;
+  end;
+end;
+
+procedure TPIC16.addCommAsm(comm: string);
+{Agrega un comentario de línea al código en la posición de memoria actual}
+begin
+  flash[iFlash].comment:=comm;
+end;
+procedure TPIC16.addCommAsm1(comm: string);
+{Agrega un comentario al código en la posición de memoria anterior}
+begin
+  if iFlash= 0 then exit;
+  flash[iFlash-1].comment+=comm;   //se agrega al que pudiera haber
+end;
+
 function TPIC16.HexChecksum(const lin:string): string;
 //Devuelve los caracteres en hexadecimal del Checksum, para el archivo *.hex
 var
@@ -578,7 +611,7 @@ var
 begin
   Result:='';
   for i:=i1 to i2 do begin
-    tmp := IntToHex(flash[i],4);
+    tmp := IntToHex(flash[i].value,4);
     Result+=copy(tmp,3,2) + copy(tmp,1,2);  //se graba con los bytes invertidos
   end;
 end;
@@ -737,35 +770,35 @@ begin
     k_ := codL;
   end;
   else
-    if (opCode and %110000) = %010000 then begin
+    if (codH and %110000) = %010000 then begin
       case codH and %001100 of
       %0000: begin
         idIns := BCF;
-        b_ := (codL and %1110000000) >> 7;
+        b_ := (opCode and %1110000000) >> 7;
         f_ := codL and %01111111;
       end;
       %0100: begin
         idIns := BSF;
-        b_ := (codL and %1110000000) >> 7;
+        b_ := (opCode and %1110000000) >> 7;
         f_ := codL and %01111111;
       end;
       %1000: begin
         idIns := BTFSC;
-        b_ := (codL and %1110000000) >> 7;
+        b_ := (opCode and %1110000000) >> 7;
         f_ := codL and %01111111;
       end;
       %1100: begin
         idIns := BTFSS;
-        b_ := (codL and %1110000000) >> 7;
+        b_ := (opCode and %1110000000) >> 7;
         f_ := codL and %01111111;
       end;
       else
         idIns := _Inval;
       end;
-    end else if (opCode and %111000) = %100000 then begin
+    end else if (codH and %111000) = %100000 then begin
       idIns := CALL;
       k_ := opCode and %11111111111;
-    end else if (opCode and %111000) = %101000 then begin
+    end else if (codH and %111000) = %101000 then begin
       idIns := GOTO_;
       k_ := opCode and %11111111111;
     end else begin
@@ -912,14 +945,14 @@ begin
   4: Result := bank0.UsedGPR + bank1.UsedGPR + bank2.UsedGPR + bank3.UsedGPR;
   end;
 end;
-procedure TPIC16.CleanMemRAM;
+procedure TPIC16.ClearMemRAM;
 var
   i: Integer;
 begin
-  for i:=0 to high(ram) do
-    ram[i] := $00;
-  for i:=0 to high(ramUsed) do
-    ramUsed[i] := false;
+  for i:=0 to high(ram) do begin
+    ram[i].value := $00;
+    ram[i].used := false;
+  end;
 end;
 //funciones para la memoria Flash
 function TPIC16.TotalMemFlash: word;
@@ -935,14 +968,15 @@ begin
   4: Result := page0.Used + page1.Used + page2.Used + page3.Used;
   end;
 end;
-procedure TPIC16.CleanMemFlash;
+procedure TPIC16.ClearMemFlash;
 var
   i: Integer;
 begin
-  for i:=0 to high(flash) do
-    flash[i] := $3FFF;
-  for i:=0 to high(flashUsed) do
-    flashUsed[i] := false;
+  for i:=0 to high(flash) do begin
+    flash[i].value := $3FFF;
+    flash[i].used := false;
+    flash[i].comment:='';
+  end;
 end;
 procedure TPIC16.GenHex(hexFile: string);
 begin
@@ -976,14 +1010,33 @@ end;
 procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage);
 {Muestra el código desensamblado de una página}
 var
-  i: Word;
+  i, il: Word;
   val: Word;
+  comLin: string;   //comentario de línea
+  comLat: string;   //comentario lateral
 begin
   if pag.nUsed = 0 then exit; //no hay datos
   for i:=pag.minUsed to pag.maxUsed do begin
-    val := pag.mem[i];
+    if pag.mem[i].comment<>'' then begin  //pone comentario si exste
+      comLin := pag.mem[i].comment;
+      il := pos('|',comLin);
+      if il<>0 then begin
+        //hay comentario lateral
+        comLat := copy(comLin, il +1, 100);
+        comLin := copy(comLin, 1, il-1);
+      end else begin
+        comLat := '';
+      end;
+    end else begin
+      comLin := '';
+      comLat := '';
+    end;
+    val := pag.mem[i].value;
     Decode(val);   //decodifica instrucción
-    lOut.Add('    $'+IntToHex(i,4) + ':' +IntToHex(val,4)+ ' ' + Disassembler);
+//    lOut.Add('    $'+IntToHex(i,4) + ':' +IntToHex(val,4)+ ' ' + Disassembler);
+    if comLin<>'' then    //escribe comentario de línea
+      lOut.Add(comLin);
+    lOut.Add('    $'+IntToHex(i,4) + ': ' + Disassembler + ' ' + comLat);
   end;
 end;
 procedure TPIC16.DumpCode(l: TStrings);
@@ -1016,25 +1069,26 @@ begin
   inherited Create;
   hexLines := TStringList.Create;
   //configuración de hardware por defecto
+  frequen := 4000000;    //4MHz
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
   GPRStart:=$20;   //dirección de inicio de los registros de usuario
 
-  bank0.Init($000, nil, @ram, @ramUsed);
-  bank1.Init($080, @bank0, @ram, @ramUsed);
-  bank2.Init($100, @bank0, @ram, @ramUsed);
-  bank3.Init($180, @bank0, @ram, @ramUsed);
+  bank0.Init($000, nil   , @ram);
+  bank1.Init($080, @bank0, @ram);
+  bank2.Init($100, @bank0, @ram);
+  bank3.Init($180, @bank0, @ram);
 
-  page0.Init($0000, @flash, @flashUsed);
-  page1.Init(PIC_PAGE_SIZE, @flash, @flashUsed);
-  page2.Init(2*PIC_PAGE_SIZE, @flash, @flashUsed);
-  page3.Init(3*PIC_PAGE_SIZE, @flash, @flashUsed);
+  page0.Init($0000          , @flash);
+  page1.Init(1*PIC_PAGE_SIZE, @flash);
+  page2.Init(2*PIC_PAGE_SIZE, @flash);
+  page3.Init(3*PIC_PAGE_SIZE, @flash);
 
   CommonRAM:=true; //los últimos 16 bytes están mapeados en el banco 0
   //estado inicial
   iFlash := 0;   //posición de inicio
-  CleanMemRAM;
-  CleanMemFlash;
+  ClearMemRAM;
+  ClearMemFlash;
 end;
 destructor TPIC16.Destroy;
 begin
@@ -1117,6 +1171,6 @@ initialization
   PIC16InstSyntax[SLEEP ] := '';
   PIC16InstSyntax[SUBLW ] := 'k';
   PIC16InstSyntax[XORLW ] := 'k';
-  PIC16InstSyntax[_Inval] := '<Inval>';
+  PIC16InstSyntax[_Inval] := '<???>';
 end.
 
