@@ -1,31 +1,26 @@
-{PIC16 16Utils 0.2
+{PIC16 16Utils 0.3b
 Cambios
 =======
-* Se corrige un error en la codificación y decodificación de las instrucciones BSF, BTFSC
-Y BTFSS
-* Se corrige un error de decodificación de algunas instrucciones.
-* Se crea el tipo TPIC16FlashCell, para representar a las celdas de memoria Flash, y
-se elimina TPIC16FlashBool, pues ya no es necesario. Se adapta el código a la nueva.
-* Se agrega a TPIC16FlashCell, un campo para incuir comentarios en el código.
-estructura.
-* Se crea el tipo TPIC16RamCell, para representar a las celdas de memoria RAM.
-* Se crea el método TPIC16.putCommAsm((), para permitir agregar un comentario al
-código de la memoria flash.
-* Se modifica TPIC16.ShowCode(), para que muestre los coemnatrios al volcar el código.
-* Se agrega el campo "frequen", para poder disponer de la frecuencia de reloj.
-* Se corrige HaveConsecGPR().
-* Se agrega el método FindOpcode().
-* Se cambia los nombres de los métodos CleanMemRAM y CleanMemFlash;
+* Se crean el método GetFreeByte() en TRAMBank y TPIC16 para pedir bytes libres en lugar
+de blqoues de varios bytes.
+* Se crean el método GetFreeBit() en TRAMBank y TPIC16 .
+* Se renombran los métodos para pedir bloques de bytes a RAM, de modo que sean consistentes
+con GetFreeByte().
+* Se cambia el tipo de TPIC16RamCell.used a byte, para poder indicar si está parcialmente
+usado (mapa de bits ).
+* Se crea el métodfo codGotoAt() para codificar saltos de forma retardada.
+* Se crea el método ValidRAMaddr(), para determinar si una dirección es válida para el
+dispositivo.
 
- Descripción
- ===========
- Unidad con utilidades para la programación de microcontroladores PIC de rango
- medio con instrucciones de 14 bits. Incluye a la mayoría de la serie
- PIC16FXXXX.
- Se define un objeto que representa a un PIC de esta serie, que está dimensionado
- para poder representar al dispositivo más complejo.
- El objetivo de esta unidad es poder servir como base para la implementación de
- ensambladores, compiladores o hasta simuladores.
+Descripción
+===========
+Unidad con utilidades para la programación de microcontroladores PIC de rango
+medio con instrucciones de 14 bits. Incluye a la mayoría de la serie
+PIC16FXXXX.
+Se define un objeto que representa a un PIC de esta serie, que está dimensionado
+para poder representar al dispositivo más complejo.
+El objetivo de esta unidad es poder servir como base para la implementación de
+ensambladores, compiladores o hasta simuladores.
 
                                          Creado por Tito Hinostroza   26/07/2015
 }
@@ -93,8 +88,8 @@ type  //tipos para instrucciones
 type //Modelo de la memoria RAM
   TPIC16RamCell = record
     value  : byte;     //value of the memory
-    used   : boolean;  //indicate if have been written
-    name   : string;   //nombre del registro
+    usado   : byte;     //indicate if have been used (0->free; 1-> used one bit; 8->used all bits)
+    name   : string;   //name of teh record
   end;
   TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
   ptrPIC16Ram = ^TPIC16Ram;
@@ -114,10 +109,12 @@ type //Modelo de la memoria RAM
   public
     procedure Init(AddrStart0: word; BankMapped0: ptrRAMBank; ram0:ptrPIC16Ram);  //inicia objeto
     property mem[i : byte] : TPIC16RamCell read Getmem write Setmem;
-    //funciones para administración de la memoria
+    //Funciones para administración de la memoria RAM
     function HaveConsecGPR(const i, n: byte): boolean; //Indica si hay "n" bytes libres
     procedure UseConsecGPR(const i, n: byte);  //Ocupa "n" bytes en la posición "i"
-    function GetMemRAM(const size: integer; var addr: word): boolean;  //obtiene una dirección libre
+    function GetFreeBit(var offs, bit: byte): boolean;  //obtiene una dirección libre
+    function GetFreeByte(var offs: byte): boolean;     //obtiene una dirección libre
+    function GetFreeBytes(const size: integer; var offs: byte): boolean;  //obtiene una dirección libre
     function TotalGPR: byte; //total de bytes que contiene para el usuario
     function UsedGPR: byte;  //total de bytes usados por el usuario
   end;
@@ -186,7 +183,7 @@ type
     b_   : byte;          //Bit destino. Válido solo en algunas instrucciones.
     k_   : word;          //Parámetro Literal. Válido solo en algunas instrucciones.
     procedure Decode(const opCode: word);  //decodifica instrucción
-    function Disassembler: string;      //Desensambla la instrucción actual
+    function Disassembler(useVarName: boolean=false): string;  //Desensambla la instrucción actual
   public
     iFlash   : integer;   //puntero a la memoria Flash, para escribir
     frequen  : integer;   //frecuencia del reloj
@@ -196,11 +193,17 @@ type
     GPRStart: integer;   //dirección de inicio de los registros de usuario
     property CommonRAM: boolean read FCommonRAM write SetCommonRAM;  //indica si tiene mapeada la RAM de otros bancos en el banco 0
     //funciones para la memoria RAM
-    function GetMemRAM(const size: integer; var addr: word; var bnk: byte): boolean;  //obtiene una dirección libre
+    function GetFreeBit(var offs, bnk, bit: byte): boolean;
+    function GetFreeByte(var offs, bnk: byte): boolean;
+    function GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;  //obtiene una dirección libre
     function FreeMemRAM(const size: integer; var addr: word): boolean;  //libera una dirección usada
     function TotalMemRAM: word;  //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
+    function ValidRAMaddr(addr: word): boolean;  //indica si una posición de memoria es válida
     procedure ClearMemRAM;
+    function BankToAbsRAM(const offset, bank: byte): word; //devuelve dirección absoluta
+    procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
+    procedure SetNameRAM(const addr: word; const bnk: byte; const nam: string);  //agrega nombre a una celda de RAM
     //funciones para la memoria Flash
     function TotalMemFlash: word;  //devuelve el total de memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
@@ -210,6 +213,7 @@ type
     procedure codAsm(const inst: TPIC16Inst; const f: byte; b: byte);
     procedure codAsm(const inst: TPIC16Inst; const k: word);
     procedure codAsm(const inst: TPIC16Inst);
+    procedure codGotoAt(iflash0: integer; const k: word);
     //métodos adicionales
     function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
     procedure addCommAsm(comm: string);  //Add a comment to the ASM code
@@ -217,8 +221,8 @@ type
     procedure GenHex(hexFile: string);  //genera un archivo hex
     procedure DumpCode(l: TStrings);  //vuelva en código que contiene
   public
-     constructor Create;
-     destructor Destroy; override;
+    constructor Create;
+    destructor Destroy; override;
   end;
 
 var  //variables globales
@@ -265,7 +269,7 @@ begin
   c := 0;
   j := i;
   while (j<=$7F) and (c<n) do begin
-    if mem[j].used then exit;  //ya está ocupado
+    if mem[j].usado<>0 then exit;  //ya está ocupado
     inc(c);      //verifica siguiente
     inc(j);
   end;
@@ -274,33 +278,85 @@ begin
   Result := true;
 end;
 procedure TRAMBank.UseConsecGPR(const i, n: byte);
-{Marca "n" bytes como usados en la posición de memori "i", en este banco.
+{Marca "n" bytes como usados en la posición de memoria "i", en este banco.
  Debe haberse verifiacdo previamente que los parámetros son válidos, porque asuí no
  se hará ninguan verificación.}
 var j: byte;
 begin
   for j:=i to i+n-1 do begin
-    ram^[i+AddrStart].used:=true;
+    ram^[j+AddrStart].usado:=255;  //todos los bits
     //    mem[j].used := true;   //no se puede
   end;
 end;
-function TRAMBank.GetMemRAM(const size: integer; var addr: word): boolean;
-{Busca un bloque de bytes consecutivs de memoria RAM en este banco.}
+function TRAMBank.GetFreeBit(var offs, bit: byte): boolean;
+{Devuelve la posición de un bit libre dentro del banco de memoria}
 var
-  i: byte;
+  i: Integer;
 begin
   Result := false;  //valor por defecto
-  if size=0 then exit;
-  for i:=$20 to $7F do begin  //verifica 1 a 1, pro seguridad
-    if HaveConsecGPR(i, size) then begin
-      //encontró del tamaño buscado
-      UseConsecGPR(i, size);  //marca como usado
-      addr := i;  //devuelve dirfección
+  for i:=$20 to $7F do begin  //verifica 1 a 1, por seguridad
+    if mem[i].usado <> 255  then begin
+      //encontró
+      offs := i;  //devuelve dirección
+      //busca el bit libre
+      if          (mem[i].usado and %00000001) = 0 then begin
+        bit:=0;
+      end else if (mem[i].usado and %00000010) = 0 then begin
+        bit:=1
+      end else if (mem[i].usado and %00000100) = 0 then begin
+        bit:=2
+      end else if (mem[i].usado and %00001000) = 0 then begin
+        bit:=3
+      end else if (mem[i].usado and %00010000) = 0 then begin
+        bit:=4
+      end else if (mem[i].usado and %00100000) = 0 then begin
+        bit:=5
+      end else if (mem[i].usado and %01000000) = 0 then begin
+        bit:=6
+      end else if (mem[i].usado and %10000000) = 0 then begin
+        bit:=7
+      end;
+      ram^[i+AddrStart].usado := mem[i].usado or (byte(1)>>bit); //marca bit usado
       Result := true;  //indica que encontró espacio
       exit;
     end;
   end;
 end;
+function TRAMBank.GetFreeByte(var offs: byte): boolean;
+{Busca un byte de memoria RAM libre, en este banco. }
+var
+  i: byte;
+begin
+  Result := false;  //valor por defecto
+  for i:=$20 to $7F do begin  //verifica 1 a 1, por seguridad
+    if mem[i].usado = 0  then begin
+      //encontró
+//      mem[i].used:=true;  //marca como usado
+      ram^[i+AddrStart].usado:=255;   //marca como usado
+      offs := i;  //devuelve dirección
+      Result := true;  //indica que encontró espacio
+      exit;
+    end;
+  end;
+end;
+function TRAMBank.GetFreeBytes(const size: integer; var offs: byte): boolean;
+{Busca un bloque de bytes consecutivs de memoria RAM en este banco. }
+var
+  i: byte;
+begin
+  Result := false;  //valor por defecto
+  if size=0 then exit;
+  for i:=$20 to $7F do begin  //verifica 1 a 1, por seguridad
+    if HaveConsecGPR(i, size) then begin
+      //encontró del tamaño buscado
+      UseConsecGPR(i, size);  //marca como usado
+      offs := i;  //devuelve dirección
+      Result := true;  //indica que encontró espacio
+      exit;
+    end;
+  end;
+end;
+
 function TRAMBank.TotalGPR: byte;
 {Total de memoria disponible para el usuario}
 begin
@@ -316,11 +372,11 @@ begin
   Result := 0;
   if LastMapped then begin //últimos bytes maperados
     for i:=$20 to $6F do begin
-      if mem[i].used then inc(Result);
+      if mem[i].usado<>0 then inc(Result);
     end;
   end else begin //bancos independientes
     for i:=$20 to $7F do begin
-      if mem[i].used then inc(Result);
+      if mem[i].usado<>0 then inc(Result);
     end;
   end;
 end;
@@ -410,7 +466,8 @@ end;
 
 { TPIC16 }
 procedure TPIC16.codAsm(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
-//Codifica las instrucciones orientadas a registro.
+{Codifica las instrucciones orientadas a registro. Las instrucciones, CLRF y MOVWF
+nousan el segundo parámetro}
 begin
   case inst of
   ADDWF : flash[iFlash].value := %00011100000000 + ord(d) + f;
@@ -485,7 +542,17 @@ begin
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
-
+procedure TPIC16.codGotoAt(iflash0: integer; const k: word);
+{Codifica una instrucción GOTO, en una posición específica y sin alterar el puntero "iFlash"
+actual. Se usa para completar saltos indefinidos}
+var
+  tmp: Integer;
+begin
+  tmp := iFlash;   //guarda flash
+  iFlash := iFlash0;   //ubica dirección
+  flash[iFlash].value := %10100000000000 + k;
+  iFlash := tmp;   //retorna dirección flash
+end;
 function TPIC16.FindOpcode(Op: string; var syntax: string): TPIC16Inst;
 {Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
  el identificador de instrucción y una cadena que representa a la sintaxis en "syntax".
@@ -575,7 +642,7 @@ var
   lin: String;
 begin
   ByteCount := length(data) div 2;
-  lin:= IntToHex(ByteCount,2) + IntToHex(Address,4) + RecordType +  Data;
+  lin:= IntToHex(ByteCount,2) + IntToHex(Address*2,4) + RecordType +  Data;
   hexLines.Add(':'+lin + HexChecksum(lin));
 end;
 procedure TPIC16.GenHexData(var pg: TFlashPage);
@@ -806,7 +873,7 @@ begin
     end;
   end;
 end;
-function TPIC16.Disassembler: string;
+function TPIC16.Disassembler(useVarName: boolean = false): string;
 {Desensambla la instrucción, actual. No se reciben parámetros sino que se usan los
 campos globales, para mejorar la velocidad. Se debe llamar después de llamar a Decode()
 para que se actualicen las variables que usa.}
@@ -829,14 +896,25 @@ begin
   SUBWF,
   SWAPF,
   XORWF: begin
-       if d_ = toF then
-         Result := nemo + IntToHex(f_,3) + ',f'
-       else
-         Result := nemo + IntToHex(f_,3) + ',w';
+      if useVarName and (ram[f_].name<>'') then begin
+        if d_ = toF then
+          Result := nemo + ram[f_].name + ',f'
+        else
+          Result := nemo + ram[f_].name + ',w';
+      end else begin
+        if d_ = toF then
+          Result := nemo + IntToHex(f_,3) + ',f'
+        else
+          Result := nemo + IntToHex(f_,3) + ',w';
+      end;
      end;
   CLRF,
   MOVWF: begin
-         Result := nemo + IntToHex(f_,3);
+        if useVarName and (ram[f_].name<>'') then begin
+          Result := nemo + ram[f_].name;
+        end else begin
+          Result := nemo + IntToHex(f_,3);
+        end;
      end;
   BCF,
   BSF,
@@ -869,52 +947,161 @@ begin
 end;
 
 //funciones para la memoria RAM
-function TPIC16.GetMemRAM(const size: integer; var addr: word; var bnk: byte): boolean;
-{Devuelve una dirección libre de la memoria flash (y el banco) para ubicar un bloque
- del tamaño indicado. Si encuentra espacio, devuelve TRUE}
+function TPIC16.GetFreeBit(var offs, bnk, bit: byte): boolean;
+{Devuelve una dirección libre de la memoria flash (y el banco). Si encuentra espacio,
+ devuelve TRUE.}
 begin
   Result := false;   //valor inicial
   if NumBanks = 2 then begin
     //solo 2 bancos
-    if bank0.GetMemRAM(size, addr) then begin
+    if bank0.GetFreeBit(offs,bit) then begin
       bnk := 0;      //encontró en este banco
       Result := true;
       exit;
-    end else if bank1.GetMemRAM(size, addr) then begin
+    end else if bank1.GetFreeBit(offs,bit) then begin
       bnk := 1;      //encontró en este banco
       Result := true;
       exit;
     end;
   end else if NumBanks = 3 then begin
     //3 bancos
-    if bank0.GetMemRAM(size, addr) then begin
+    if bank0.GetFreeBit(offs,bit) then begin
       bnk := 0;      //encontró en este banco
       Result := true;
       exit;
-    end else if bank1.GetMemRAM(size, addr) then begin
+    end else if bank1.GetFreeBit(offs,bit) then begin
       bnk := 1;      //encontró en este banco
       Result := true;
       exit;
-    end else if bank2.GetMemRAM(size, addr) then begin
+    end else if bank2.GetFreeBit(offs,bit) then begin
       bnk := 2;      //encontró en este banco
       Result := true;
       exit;
     end;
   end else begin
     //se asume 4 bancos
-    if bank0.GetMemRAM(size, addr) then begin
+    if bank0.GetFreeBit(offs,bit) then begin
       bnk := 0;      //encontró en este banco
       Result := true;
       exit;
-    end else if bank1.GetMemRAM(size, addr) then begin
+    end else if bank1.GetFreeBit(offs,bit) then begin
       bnk := 1;      //encontró en este banco
       Result := true;
       exit;
-    end else if bank2.GetMemRAM(size, addr) then begin
+    end else if bank2.GetFreeBit(offs,bit) then begin
       bnk := 2;      //encontró en este banco
       Result := true;
       exit;
-    end else if bank3.GetMemRAM(size, addr) then begin
+    end else if bank3.GetFreeBit(offs,bit) then begin
+      bnk := 3;      //encontró en este banco
+      Result := true;
+      exit;
+    end;
+  end;
+  {si llegó aquí es porque no encontró la memoria solicitada,
+  al menos de ese tamaño}
+end;
+function TPIC16.GetFreeByte(var offs, bnk: byte): boolean;
+{Devuelve una dirección libre de la memoria flash (y el banco). Si encuentra espacio,
+ devuelve TRUE.}
+begin
+  Result := false;   //valor inicial
+  if NumBanks = 2 then begin
+    //solo 2 bancos
+    if bank0.GetFreeByte(offs) then begin
+      bnk := 0;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank1.GetFreeByte(offs) then begin
+      bnk := 1;      //encontró en este banco
+      Result := true;
+      exit;
+    end;
+  end else if NumBanks = 3 then begin
+    //3 bancos
+    if bank0.GetFreeByte(offs) then begin
+      bnk := 0;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank1.GetFreeByte(offs) then begin
+      bnk := 1;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank2.GetFreeByte(offs) then begin
+      bnk := 2;      //encontró en este banco
+      Result := true;
+      exit;
+    end;
+  end else begin
+    //se asume 4 bancos
+    if bank0.GetFreeByte(offs) then begin
+      bnk := 0;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank1.GetFreeByte(offs) then begin
+      bnk := 1;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank2.GetFreeByte(offs) then begin
+      bnk := 2;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank3.GetFreeByte(offs) then begin
+      bnk := 3;      //encontró en este banco
+      Result := true;
+      exit;
+    end;
+  end;
+  {si llegó aquí es porque no encontró la memoria solicitada,
+  al menos de ese tamaño}
+end;
+function TPIC16.GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;
+{Devuelve una dirección libre de la memoria flash (y el banco) para ubicar un bloque
+ del tamaño indicado. Si encuentra espacio, devuelve TRUE.
+ El tamaño se da en bytes, pero si el valor es negativo, se entiende que es en bits.}
+begin
+  Result := false;   //valor inicial
+  if NumBanks = 2 then begin
+    //solo 2 bancos
+    if bank0.GetFreeBytes(size, offs) then begin
+      bnk := 0;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank1.GetFreeBytes(size, offs) then begin
+      bnk := 1;      //encontró en este banco
+      Result := true;
+      exit;
+    end;
+  end else if NumBanks = 3 then begin
+    //3 bancos
+    if bank0.GetFreeBytes(size, offs) then begin
+      bnk := 0;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank1.GetFreeBytes(size, offs) then begin
+      bnk := 1;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank2.GetFreeBytes(size, offs) then begin
+      bnk := 2;      //encontró en este banco
+      Result := true;
+      exit;
+    end;
+  end else begin
+    //se asume 4 bancos
+    if bank0.GetFreeBytes(size, offs) then begin
+      bnk := 0;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank1.GetFreeBytes(size, offs) then begin
+      bnk := 1;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank2.GetFreeBytes(size, offs) then begin
+      bnk := 2;      //encontró en este banco
+      Result := true;
+      exit;
+    end else if bank3.GetFreeBytes(size, offs) then begin
       bnk := 3;      //encontró en este banco
       Result := true;
       exit;
@@ -945,15 +1132,57 @@ begin
   4: Result := bank0.UsedGPR + bank1.UsedGPR + bank2.UsedGPR + bank3.UsedGPR;
   end;
 end;
+function TPIC16.ValidRAMaddr(addr: word): boolean;
+{Indica si la dirercción indicada es váldia dentro del hardware del PIC}
+begin
+  case NumBanks of
+  2: begin
+      if addr > $100 then exit(false);   //excede límite
+  end;
+  3: begin
+      if addr > $180 then exit(false);   //excede límite
+  end;
+  4: begin
+      if addr > $200 then exit(false);   //excede límite
+  end;
+  end;
+  exit(true);
+end;
 procedure TPIC16.ClearMemRAM;
 var
   i: Integer;
 begin
   for i:=0 to high(ram) do begin
     ram[i].value := $00;
-    ram[i].used := false;
+    ram[i].usado := 0;
+    ram[i].name:='';
   end;
 end;
+
+function TPIC16.BankToAbsRAM(const offset, bank: byte): word;
+{Convierte una dirección y banco a una dirección absoluta}
+begin
+  case bank of
+  0: Result := offset;
+  1: Result := $80 +offset;
+  2: Result := $100+offset;
+  3: Result := $180+offset;
+  end;
+end;
+procedure TPIC16.AbsToBankRAM(const AbsAddr: word; var offset, bank: byte);
+{Convierte dirección absoluta a dirección en bancos}
+begin
+   offset := AbsAddr and %01111111;
+   bank :=  AbsAddr >> 7;
+end;
+
+procedure TPIC16.SetNameRAM(const addr: word; const bnk: byte; const nam: string
+  );
+{Escribe en el campo "name" de la RAM en la psoición indicada}
+begin
+   ram[BankToAbsRAM(addr, bnk)].name:=nam;
+end;
+
 //funciones para la memoria Flash
 function TPIC16.TotalMemFlash: word;
 begin
@@ -1036,7 +1265,7 @@ begin
 //    lOut.Add('    $'+IntToHex(i,4) + ':' +IntToHex(val,4)+ ' ' + Disassembler);
     if comLin<>'' then    //escribe comentario de línea
       lOut.Add(comLin);
-    lOut.Add('    $'+IntToHex(i,4) + ': ' + Disassembler + ' ' + comLat);
+    lOut.Add('    $'+IntToHex(i,4) + ': ' + Disassembler(true) + ' ' + comLat);
   end;
 end;
 procedure TPIC16.DumpCode(l: TStrings);
