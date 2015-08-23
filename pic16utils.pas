@@ -1,4 +1,4 @@
-{PIC16 16Utils 0.3b
+{PIC16 16Utils 0.4b
 Cambios
 =======
 * Se crean el método GetFreeByte() en TRAMBank y TPIC16 para pedir bytes libres en lugar
