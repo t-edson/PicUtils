@@ -129,9 +129,9 @@ begin
          exit;
        end;
        if l='f' then
-          pic.codAsm(idInst, f, toF)
+          pic.codAsmFD(idInst, f, toF)
        else
-          pic.codAsm(idInst, f, toW);
+          pic.codAsmFD(idInst, f, toW);
     end;
     'f':begin
        if not ExtractNumber(l,f) then exit;
@@ -139,7 +139,7 @@ begin
          Application.MessageBox('Syntax Error','');
          exit;
        end;
-       pic.codAsm(idInst, f, toW);  //"toW" no used.
+       pic.codAsmF(idInst, f);
     end;
     'fb':begin
        if not ExtractNumber(l,f) then exit;
@@ -149,7 +149,7 @@ begin
          Application.MessageBox('Syntax Error','');
          exit;
        end;
-       pic.codAsm(idInst, f, b);  //"b" no used.
+       pic.codAsmFB(idInst, f, b);
     end;
     'k': begin
        if not ExtractNumber(l,k) then exit;
@@ -157,14 +157,22 @@ begin
          Application.MessageBox('Syntax Error','');
          exit;
        end;
-       pic.codAsm(idInst, k);  //"toW" no used.
+       pic.codAsmK(idInst, k);
+    end;
+    'a': begin
+       if not ExtractNumber(l,k) then exit;
+       if l <> '' then begin
+         Application.MessageBox('Syntax Error','');
+         exit;
+       end;
+       pic.codAsmA(idInst, k);
     end;
     '': begin
       if l <> '' then begin
         Application.MessageBox('Syntax Error','');
         exit;
       end;
-      pic.codAsm(idInst);  //"toW" no used.
+      pic.codAsm(idInst);
     end;
     end;
   end;

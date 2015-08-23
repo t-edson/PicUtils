@@ -1,16 +1,11 @@
 {PIC16 16Utils 0.4b
 Cambios
 =======
-* Se crean el método GetFreeByte() en TRAMBank y TPIC16 para pedir bytes libres en lugar
-de blqoues de varios bytes.
-* Se crean el método GetFreeBit() en TRAMBank y TPIC16 .
-* Se renombran los métodos para pedir bloques de bytes a RAM, de modo que sean consistentes
-con GetFreeByte().
-* Se cambia el tipo de TPIC16RamCell.used a byte, para poder indicar si está parcialmente
-usado (mapa de bits ).
-* Se crea el métodfo codGotoAt() para codificar saltos de forma retardada.
-* Se crea el método ValidRAMaddr(), para determinar si una dirección es válida para el
-dispositivo.
+* Se crea una nueva forma de la sintaxis ("a") usada para llenar la tabla PIC16InstSyntax[].
+* Se cambia de nombre a las instrucciones codAsm(), en lugar de sobrecargarlas, para hacerlas
+menos propensas a confusión y separar mejor a las categorías.
+* Se crean dos nuevas formas de las instruccioens codASM(), para separar claramente las
+sintaxis de todas las instrucciones.
 
 Descripción
 ===========
@@ -159,10 +154,10 @@ type
   { TPIC16 }
   TPIC16 = class
   private
-    hexLines : TStringList; //usado para crear archivo *.hex
+    hexLines : TStringList;   //usado para crear archivo *.hex
     //memorias
-    flash    : TPIC16Flash;     //memoria Flash
-    ram      : TPIC16Ram;      //memoria RAM
+    flash    : TPIC16Flash;   //memoria Flash
+    ram      : TPIC16Ram;     //memoria RAM
     bank0, bank1, bank2, bank3: TRAMBank;  //bancos de memoria RAM
     page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
     procedure GenHexComm(comment: string);
@@ -208,13 +203,15 @@ type
     function TotalMemFlash: word;  //devuelve el total de memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
     procedure ClearMemFlash;
-    //métodos para codificar programas
-    procedure codAsm(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);  //codifica una instrucción ASM simplificada
-    procedure codAsm(const inst: TPIC16Inst; const f: byte; b: byte);
-    procedure codAsm(const inst: TPIC16Inst; const k: word);
+    //Métodos para codificar instrucciones de acuerdo a la sintaxis
+    procedure codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
+    procedure codAsmF(const inst: TPIC16Inst; const f: byte);
+    procedure codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
+    procedure codAsmK(const inst: TPIC16Inst; const k: byte);
+    procedure codAsmA(const inst: TPIC16Inst; const a: word);
     procedure codAsm(const inst: TPIC16Inst);
     procedure codGotoAt(iflash0: integer; const k: word);
-    //métodos adicionales
+    //Métodos adicionales
     function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
     procedure addCommAsm(comm: string);  //Add a comment to the ASM code
     procedure addCommAsm1(comm: string); //Add lateral comment to the ASM code
@@ -465,14 +462,12 @@ begin
 end;
 
 { TPIC16 }
-procedure TPIC16.codAsm(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
-{Codifica las instrucciones orientadas a registro. Las instrucciones, CLRF y MOVWF
-nousan el segundo parámetro}
+procedure TPIC16.codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
+{Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f,d}
 begin
   case inst of
   ADDWF : flash[iFlash].value := %00011100000000 + ord(d) + f;
   ANDWF : flash[iFlash].value := %00011100000000 + ord(d) + f;
-  CLRF  : flash[iFlash].value := %00000110000000 + f;
   COMF  : flash[iFlash].value := %00100100000000 + ord(d) + f;
   DECF  : flash[iFlash].value := %00001100000000 + ord(d) + f;
   DECFSZ: flash[iFlash].value := %00101100000000 + ord(d) + f;
@@ -480,7 +475,6 @@ begin
   INCFSZ: flash[iFlash].value := %00111100000000 + ord(d) + f;
   IORWF : flash[iFlash].value := %00010000000000 + ord(d) + f;
   MOVF  : flash[iFlash].value := %00100000000000 + ord(d) + f;
-  MOVWF : flash[iFlash].value := %00000010000000 + f;
   RLF   : flash[iFlash].value := %00110100000000 + ord(d) + f;
   RRF   : flash[iFlash].value := %00110000000000 + ord(d) + f;
   SUBWF : flash[iFlash].value := %00001000000000 + ord(d) + f;
@@ -492,7 +486,19 @@ begin
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
-procedure TPIC16.codAsm(const inst: TPIC16Inst; const f: byte; b: byte);
+procedure TPIC16.codAsmF(const inst: TPIC16Inst; const f: byte);
+{Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f}
+begin
+  case inst of
+  CLRF  : flash[iFlash].value := %00000110000000 + f;
+  MOVWF : flash[iFlash].value := %00000010000000 + f;
+  else
+    raise Exception.Create('Error de implementación.');
+  end;
+  flash[iFlash].used := true;  //marca como usado
+  inc(iFlash);
+end;
+procedure TPIC16.codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
 //Codifica las instrucciones orientadas a bit.
 begin
   case inst of
@@ -506,15 +512,12 @@ begin
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
-procedure TPIC16.codAsm(const inst: TPIC16Inst; const k: word);
-{Codifica las instrucciones con constantes y de control.
- "k" debe ser word, porque en la instrucción GOTO, requiere 11 bits.}
+procedure TPIC16.codAsmK(const inst: TPIC16Inst; const k: byte);
+{Codifica las instrucciones con constantes.}
 begin
   case inst of
   ADDLW : flash[iFlash].value := %11111000000000 + k;
   ANDLW : flash[iFlash].value := %11100100000000 + k;
-  CALL  : flash[iFlash].value := %10000000000000 + k;
-  GOTO_ : flash[iFlash].value := %10100000000000 + k;
   IORLW : flash[iFlash].value := %11100000000000 + k;
   MOVLW : flash[iFlash].value := %11000000000000 + k;
   RETLW : flash[iFlash].value := %11010000000000 + k;
@@ -526,6 +529,20 @@ begin
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
+procedure TPIC16.codAsmA(const inst: TPIC16Inst; const a: word);
+{Codifica las instrucciones de control.
+ "a" debe ser word, porque la dirección destino, requiere 11 bits.}
+begin
+  case inst of
+  CALL  : flash[iFlash].value := %10000000000000 + a;
+  GOTO_ : flash[iFlash].value := %10100000000000 + a;
+  else
+    raise Exception.Create('Error de implementación.');
+  end;
+  flash[iFlash].used := true;  //marca como usado
+  inc(iFlash);
+end;
+
 procedure TPIC16.codAsm(const inst: TPIC16Inst);
 //Codifica las instrucciones de control.
 begin
@@ -1365,6 +1382,13 @@ initialization
   PIC16InstName[_Inval] := '<Inval>';
 
   //Inicializa Sintaxis de las instrucciones
+  {Los valorees para la sintaxis significan:
+  f->dirección de un registro en RAM (0..127)
+  d->destino (W o F)
+  b->número de bit (0..7)
+  a->dirección destino (0..$7FF)
+  k->literal byte (0..255)
+  }
   PIC16InstSyntax[ADDWF ] := 'fd';
   PIC16InstSyntax[ANDWF ] := 'fd';
   PIC16InstSyntax[CLRF  ] := 'f';
@@ -1389,9 +1413,9 @@ initialization
   PIC16InstSyntax[BTFSS ] := 'fb';
   PIC16InstSyntax[ADDLW ] := 'k';
   PIC16InstSyntax[ANDLW ] := 'k';
-  PIC16InstSyntax[CALL  ] := 'k';
+  PIC16InstSyntax[CALL  ] := 'a';
   PIC16InstSyntax[CLRWDT] := '';
-  PIC16InstSyntax[GOTO_ ] := 'k';
+  PIC16InstSyntax[GOTO_ ] := 'a';
   PIC16InstSyntax[IORLW ] := 'k';
   PIC16InstSyntax[MOVLW ] := 'k';
   PIC16InstSyntax[RETFIE] := '';

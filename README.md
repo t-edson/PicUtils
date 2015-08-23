@@ -1,4 +1,4 @@
-# PicUtils 0.3
+# PicUtils 0.4b
 
 Librería en Lazarus, con utilidades para la programación de microcontroladores PIC.
 
@@ -23,9 +23,9 @@ Se puede trabajar de diversas formas con la libreria, dependiendo de la función
 
 ```
 uses  ... , pic16utils;
-
+var
     pic: TPIC16;
-
+...
 	pic := TPIC16.Create;
 	
 	//hacer algo
@@ -48,8 +48,8 @@ Una forma es usar los métodos codAsm(), que trabaja introduciendo las instrucci
 
 ```
   pic.codAsm(CLRWDT);
-  pic.codAsm(MOVLW,$01);
-  pic.codAsm(MOVWF,$21,toF);  //el parámetro "toF" es irrelevante
+  pic.codAsmK(MOVLW,$01);
+  pic.codAsmF(MOVWF,$21);  
 ```
 
 Luego se debe llamar al método: GenHex(): 
@@ -57,7 +57,49 @@ Luego se debe llamar al método: GenHex():
 ```
   pic.GenHex('salida.hex');
 ```
+## Modelado del hardware
 
+El objeto TPIC16, representa a un PIC, incluyendo su arquitectura interna. En la presente versión, solo se representa a la memoria flash y los registros básicos, como el contador de programa y el acumulador W.
+
+La memoria RAM se modela como una tabla lineal de tipo:
+
+```
+  TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
+```
+
+Pero para facilitar el trabajo con las páginas, se usa el objeto TRAMBank que representa a una página de memoria.
+
+De la misma forma, la memoria flash se representa con una tabla lineal de tipo:
+
+```
+  TPIC16Flash = array[0..PIC_MAX_FLASH-1] of TPIC16FlashCell;
+```
+
+Pero para facilitar el manejo de las múltiples páginas que puede tener un dispositivo, se usa el objeto TFlashPage, que representa a una página de la memoria flash.	
+
+## Codificando instrucciones
+
+Sea para generar un acrhivo *.hex o para realizar una simulación (no implementado en la versión actual), se requerirá ingresar las instrucciones en la memoria flash del PIC. Para ello existen diversos métodos de acuerdo a la sintaxis de la instrucción.
+
+Todas las instrucciones se han dividido en 5 categoría distintas de acuerdo a su sintaxis, estas son:
+
+Sintaxis:  
+
+De la forma: NEMÓNICO f,d -> Se codifican con el método codAsmFD()
+De la forma: NEMÓNICO f   -> Se codifican con el método codAsmF()
+De la forma: NEMÓNICO f,b -> Se codifican con el método codAsmFB()
+De la forma: NEMÓNICO k   -> Se codifican con el método codAsmK()
+De la forma: NEMÓNICO a   -> Se codifican con el método codAsmA()
+De la forma: NEMÓNICO     -> Se codifican con el método codAsm()
+
+Donde:
+  f->dirección de un registro en RAM (0..127)
+  d->destino (W o F)
+  b->número de bit (0..7)
+  a->dirección destino (0..$7FF)
+  k->literal byte (0..255)
+
+ 
 ## Notas
 
 Actualmente solo se incluyen las rutinas para el manejo de microcontroladores PIC de rango medio, con instrucciones de 14 bits.
