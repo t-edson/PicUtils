@@ -85,20 +85,25 @@ Todas las instrucciones se han dividido en 5 categoría distintas de acuerdo a s
 
 Sintaxis:  
 
-De la forma: NEMÓNICO f,d -> Se codifican con el método codAsmFD()
-De la forma: NEMÓNICO f   -> Se codifican con el método codAsmF()
-De la forma: NEMÓNICO f,b -> Se codifican con el método codAsmFB()
-De la forma: NEMÓNICO k   -> Se codifican con el método codAsmK()
-De la forma: NEMÓNICO a   -> Se codifican con el método codAsmA()
-De la forma: NEMÓNICO     -> Se codifican con el método codAsm()
+* De la forma: NEMÓNICO f,d -> Se codifican con el método codAsmFD()
+* De la forma: NEMÓNICO f   -> Se codifican con el método codAsmF()
+* De la forma: NEMÓNICO f,b -> Se codifican con el método codAsmFB()
+* De la forma: NEMÓNICO k   -> Se codifican con el método codAsmK()
+* De la forma: NEMÓNICO a   -> Se codifican con el método codAsmA()
+* De la forma: NEMÓNICO     -> Se codifican con el método codAsm()
 
 Donde:
-  f->dirección de un registro en RAM (0..127)
-  d->destino (W o F)
-  b->número de bit (0..7)
-  a->dirección destino (0..$7FF)
-  k->literal byte (0..255)
 
+  f->dirección de un registro en RAM (0..127)
+  
+  d->destino (W o F)
+  
+  b->número de bit (0..7)
+  
+  a->dirección destino (0..$7FF)
+  
+  k->literal byte (0..255)
+  
  
 ## Notas
 
