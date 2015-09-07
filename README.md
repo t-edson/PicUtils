@@ -67,7 +67,18 @@ La memoria RAM se modela como una tabla lineal de tipo:
   TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
 ```
 
-Pero para facilitar el trabajo con las páginas, se usa el objeto TRAMBank que representa a una página de memoria.
+Pero para facilitar el trabajo con las páginas, se usa el objeto TRAMBank que representa a una página de memoria. Este objeto incluye métodos para manejar la arquitectura especial que puede tener la memoria del PIC.
+
+Para administrar eficiéntemente la memoria del PIC, se maneja el registro TPIC16RamCell, que guarda información detallada de cada posición de la RAM:
+```
+  TPIC16RamCell = record
+    value  : byte;     
+    used   : byte;     
+    name   : string;   
+    state  : TPIC16CellState;  //estado de la celda
+  end;
+```
+La propiedad "used", es en realidad un mapa de bits, en donde se marcan los bits que estén ocupados, ya que en los PIC, es común manejar variables de 1 bit de longitud.
 
 De la misma forma, la memoria flash se representa con una tabla lineal de tipo:
 
@@ -75,7 +86,9 @@ De la misma forma, la memoria flash se representa con una tabla lineal de tipo:
   TPIC16Flash = array[0..PIC_MAX_FLASH-1] of TPIC16FlashCell;
 ```
 
-Pero para facilitar el manejo de las múltiples páginas que puede tener un dispositivo, se usa el objeto TFlashPage, que representa a una página de la memoria flash.	
+Pero para facilitar el manejo de las múltiples páginas que puede tener un dispositivo, se usa el objeto TFlashPage, que representa a una página de la memoria flash.
+
+Para adaptar el objeto TPIC16, a un dispositivo en especial, se debe configurar los parámetros de hardware. Para facilitar esta tarea, se dispone de la unidad PIC16devices, que contiene la configuración para diferentes modelos de PIC.
 
 ## Codificando instrucciones
 

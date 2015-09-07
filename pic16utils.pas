@@ -6,12 +6,17 @@ Cambios
 menos propensas a confusión y separar mejor a las categorías.
 * Se crean dos nuevas formas de las instruccioens codASM(), para separar claramente las
 sintaxis de todas las instrucciones.
-
+* Se agrega nuevos campos a TPIC16, para modelar mejor la arquitectura del PIC
+* Se hacen públicos algunos campos, para facilitar la configuración del hardware
+* Se crea el tipo TPIC16CellState, para dar más información sobre la celda de memoria.
+* Se modifica el objeto TRAMBank para trabajar con TPIC16CellState.
+* Se elimina la propiedad CommonRAM, porque era muy general.
 Descripción
 ===========
 Unidad con utilidades para la programación de microcontroladores PIC de rango
 medio con instrucciones de 14 bits. Incluye a la mayoría de la serie
 PIC16FXXXX.
+Esta unidad trabaja con tamaños de página de 2K y tamaños de bancos de 128 bytes.
 Se define un objeto que representa a un PIC de esta serie, que está dimensionado
 para poder representar al dispositivo más complejo.
 El objetivo de esta unidad es poder servir como base para la implementación de
@@ -81,10 +86,18 @@ type  //tipos para instrucciones
 
 
 type //Modelo de la memoria RAM
+  TPIC16CellState = (
+     cs_enabled,    //habilitado para uso
+     cs_disabled,   //deshabilitado para uso
+     cs_mapToBnk    {mapeado en otro banco. No se indica específicamente a qué banco está
+                     mapeado, porque lo más práctico es tener una referencia al banco, y
+                     eso es trabajo de TRAMBank.}
+  );
   TPIC16RamCell = record
     value  : byte;     //value of the memory
-    usado   : byte;     //indicate if have been used (0->free; 1-> used one bit; 8->used all bits)
-    name   : string;   //name of teh record
+    used   : byte;     //indicate if have been used (0->free; 1-> used one bit; 8->used all bits)
+    name   : string;   //name of the record
+    state  : TPIC16CellState;  //status of the cell
   end;
   TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
   ptrPIC16Ram = ^TPIC16Ram;
@@ -94,13 +107,15 @@ type //Modelo de la memoria RAM
   ptrRAMBank = ^TRAMBank;
   { TRAMBank }
   TRAMBank = object
-     ram    : ptrPIC16Ram;     //puntero a memoria RAM
-     AddrStart: word;          //dirección de inicio en la memoria RAM total
-     LastMapped: boolean;      //indica si los últimos bytes están mapeados
-     BankMapped: ptrRAMBank;   //banco al que están mapeados los últimos bytes
+    ram    : ptrPIC16Ram;     //puntero a memoria RAM
+    AddrStart: word;          //dirección de inicio en la memoria RAM total
+    BankMapped: ptrRAMBank;   //banco al que están mapeados los últimos bytes
+    GPRStart  : byte;         //dirección de inicio de registros para el usuario
   private
     function Getmem(i : byte): TPIC16RamCell;
     procedure Setmem(i : byte; AValue: TPIC16RamCell);
+    function AvailBit(const i: byte): boolean;
+    function AvailByte(const i: byte): boolean;
   public
     procedure Init(AddrStart0: word; BankMapped0: ptrRAMBank; ram0:ptrPIC16Ram);  //inicia objeto
     property mem[i : byte] : TPIC16RamCell read Getmem write Setmem;
@@ -112,6 +127,7 @@ type //Modelo de la memoria RAM
     function GetFreeBytes(const size: integer; var offs: byte): boolean;  //obtiene una dirección libre
     function TotalGPR: byte; //total de bytes que contiene para el usuario
     function UsedGPR: byte;  //total de bytes usados por el usuario
+    procedure InitStateMem(i1, i2: byte; status0: TPIC16CellState);  //inicia la memoria
   end;
 
 type  //Modelos de la memoria Flash
@@ -158,8 +174,6 @@ type
     //memorias
     flash    : TPIC16Flash;   //memoria Flash
     ram      : TPIC16Ram;     //memoria RAM
-    bank0, bank1, bank2, bank3: TRAMBank;  //bancos de memoria RAM
-    page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
     procedure GenHexComm(comment: string);
     procedure GenHexData(Address: word; Data: string);
     procedure GenHexData(var pg: TFlashPage);
@@ -169,9 +183,9 @@ type
     procedure ShowCode(lOut: TStrings; pag: TFlashPage);
   private
     FCommonRAM: boolean;
-    procedure SetCommonRAM(AValue: boolean);
     function StrHexFlash(i1, i2: integer): string;
   private //campos para procesar instrucciones
+    FGPRStart: integer;
     idIns: TPIC16Inst;    //ID de Instrucción.
     d_   : TPIC16destin;  //Destino de operación. Válido solo en algunas instrucciones.
     f_   : byte;          //Registro destino. Válido solo en algunas instrucciones.
@@ -179,14 +193,18 @@ type
     k_   : word;          //Parámetro Literal. Válido solo en algunas instrucciones.
     procedure Decode(const opCode: word);  //decodifica instrucción
     function Disassembler(useVarName: boolean=false): string;  //Desensambla la instrucción actual
+    procedure SetGPRStart(AValue: integer);
   public
+    Model    : string;    //modelo de PIC
+    Npins    : byte;      //número de pines
     iFlash   : integer;   //puntero a la memoria Flash, para escribir
     frequen  : integer;   //frecuencia del reloj
     //Propiedades que definen la arquitectura del PIC destino.
     NumBanks: byte;      //Número de bancos de RAM.
     NumPages: byte;      //Número de páginas de memoria Flash.
-    GPRStart: integer;   //dirección de inicio de los registros de usuario
-    property CommonRAM: boolean read FCommonRAM write SetCommonRAM;  //indica si tiene mapeada la RAM de otros bancos en el banco 0
+    bank0, bank1, bank2, bank3: TRAMBank;  //bancos de memoria RAM
+    page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
+    property GPRStart: integer read FGPRStart write SetGPRStart;   //dirección de inicio de los registros de usuario
     //funciones para la memoria RAM
     function GetFreeBit(var offs, bnk, bit: byte): boolean;
     function GetFreeByte(var offs, bnk: byte): boolean;
@@ -233,19 +251,20 @@ implementation
 function TRAMBank.Getmem(i: byte): TPIC16RamCell;
 begin
   //Se asume que i debe ser menor que $7F
-  if (i>=$70) and LastMapped then begin
+  if ram^[i+AddrStart].state = cs_mapToBnk then begin
     //estas direcciones están mapeadas en otro banco
     Result := BankMapped^.mem[i];
-  end else begin
+  end else begin  //caso normal
     Result := ram^[i+AddrStart];
   end;
 end;
 procedure TRAMBank.Setmem(i: byte; AValue: TPIC16RamCell);
 begin
-  if (i>=$70) and LastMapped then begin
+  //Se asume que i debe ser menor que $7F
+  if ram^[i+AddrStart].state = cs_mapToBnk then begin
     //estas direcciones están mapeadas en otro banco
     BankMapped^.mem[i] := AValue;
-  end else begin
+  end else begin  //caso normal
     ram^[i+AddrStart] := AValue;
   end;
 end;
@@ -255,6 +274,19 @@ begin
   AddrStart :=AddrStart0;
   BankMapped:=BankMapped0;
   ram       :=ram0;
+  GPRStart := $20;  //dirección de inicio de GPR por defecto
+end;
+function TRAMBank.AvailBit(const i: byte): boolean; inline;
+{Indica si hay un bit disponible en la posición de memoria indicada}
+begin
+  Result := (ram^[i+AddrStart].state = cs_enabled) and
+            (ram^[i+AddrStart].used <> 255);
+end;
+function TRAMBank.AvailByte(const i: byte): boolean; inline;
+{Indica si hay un byte disponible en la posición de memoria indicada}
+begin
+  Result := (ram^[i+AddrStart].state = cs_enabled) and
+            (ram^[i+AddrStart].used = 0);
 end;
 function TRAMBank.HaveConsecGPR(const i, n: byte): boolean;
 {Indica si hay "n" bytes consecutivos libres en la posicióm "i", en este banco de la RAM}
@@ -266,7 +298,7 @@ begin
   c := 0;
   j := i;
   while (j<=$7F) and (c<n) do begin
-    if mem[j].usado<>0 then exit;  //ya está ocupado
+    if not AvailByte(i) then exit;  //no se puede usar
     inc(c);      //verifica siguiente
     inc(j);
   end;
@@ -276,12 +308,12 @@ begin
 end;
 procedure TRAMBank.UseConsecGPR(const i, n: byte);
 {Marca "n" bytes como usados en la posición de memoria "i", en este banco.
- Debe haberse verifiacdo previamente que los parámetros son válidos, porque asuí no
+ Debe haberse verificado previamente que los parámetros son válidos, porque asuí no
  se hará ninguan verificación.}
 var j: byte;
 begin
   for j:=i to i+n-1 do begin
-    ram^[j+AddrStart].usado:=255;  //todos los bits
+    ram^[j+AddrStart].used:=255;  //todos los bits
     //    mem[j].used := true;   //no se puede
   end;
 end;
@@ -291,29 +323,29 @@ var
   i: Integer;
 begin
   Result := false;  //valor por defecto
-  for i:=$20 to $7F do begin  //verifica 1 a 1, por seguridad
-    if mem[i].usado <> 255  then begin
+  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+    if AvailBit(i)  then begin
       //encontró
       offs := i;  //devuelve dirección
       //busca el bit libre
-      if          (mem[i].usado and %00000001) = 0 then begin
+      if          (mem[i].used and %00000001) = 0 then begin
         bit:=0;
-      end else if (mem[i].usado and %00000010) = 0 then begin
+      end else if (mem[i].used and %00000010) = 0 then begin
         bit:=1
-      end else if (mem[i].usado and %00000100) = 0 then begin
+      end else if (mem[i].used and %00000100) = 0 then begin
         bit:=2
-      end else if (mem[i].usado and %00001000) = 0 then begin
+      end else if (mem[i].used and %00001000) = 0 then begin
         bit:=3
-      end else if (mem[i].usado and %00010000) = 0 then begin
+      end else if (mem[i].used and %00010000) = 0 then begin
         bit:=4
-      end else if (mem[i].usado and %00100000) = 0 then begin
+      end else if (mem[i].used and %00100000) = 0 then begin
         bit:=5
-      end else if (mem[i].usado and %01000000) = 0 then begin
+      end else if (mem[i].used and %01000000) = 0 then begin
         bit:=6
-      end else if (mem[i].usado and %10000000) = 0 then begin
+      end else if (mem[i].used and %10000000) = 0 then begin
         bit:=7
       end;
-      ram^[i+AddrStart].usado := mem[i].usado or (byte(1)>>bit); //marca bit usado
+      ram^[i+AddrStart].used := mem[i].used or (byte(1)>>bit); //marca bit usado
       Result := true;  //indica que encontró espacio
       exit;
     end;
@@ -325,11 +357,11 @@ var
   i: byte;
 begin
   Result := false;  //valor por defecto
-  for i:=$20 to $7F do begin  //verifica 1 a 1, por seguridad
-    if mem[i].usado = 0  then begin
+  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+    if AvailByte(i)  then begin
       //encontró
 //      mem[i].used:=true;  //marca como usado
-      ram^[i+AddrStart].usado:=255;   //marca como usado
+      ram^[i+AddrStart].used:=255;   //marca como usado
       offs := i;  //devuelve dirección
       Result := true;  //indica que encontró espacio
       exit;
@@ -343,7 +375,7 @@ var
 begin
   Result := false;  //valor por defecto
   if size=0 then exit;
-  for i:=$20 to $7F do begin  //verifica 1 a 1, por seguridad
+  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
     if HaveConsecGPR(i, size) then begin
       //encontró del tamaño buscado
       UseConsecGPR(i, size);  //marca como usado
@@ -356,27 +388,35 @@ end;
 
 function TRAMBank.TotalGPR: byte;
 {Total de memoria disponible para el usuario}
+var
+  i: Byte;
 begin
-   if LastMapped then  //últimos bytes maperados
-     Result:=96-16  //asume que no son de este banco
-   else
-     Result:=96;
+  Result := 0;
+  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+    if ram^[i+AddrStart].state = cs_enabled then
+      inc(Result);
+  end;
 end;
 function TRAMBank.UsedGPR: byte;
 var
   i: Integer;
 begin
   Result := 0;
-  if LastMapped then begin //últimos bytes maperados
-    for i:=$20 to $6F do begin
-      if mem[i].usado<>0 then inc(Result);
-    end;
-  end else begin //bancos independientes
-    for i:=$20 to $7F do begin
-      if mem[i].usado<>0 then inc(Result);
-    end;
+  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+    if AvailByte(i) then
+      inc(Result);
   end;
 end;
+procedure TRAMBank.InitStateMem(i1, i2: byte; status0: TPIC16CellState);
+{Inicia el campo State, de la memoria. Permite definir el estado real de la memoria RAM}
+var
+  i: Byte;
+begin
+  for i:=i1 to i2 do begin  //verifica 1 a 1, por seguridad
+    ram^[i+AddrStart].state := status0;
+  end;
+end;
+
 { TFlashPage }
 function TFlashPage.Getmem(i: word): TPIC16FlashCell;
 begin
@@ -625,20 +665,6 @@ begin
    inc(chk);        //complemento a 2
    part := IntToHex(chk,4);  //a hexadecimal
    Result := copy(part, length(part)-1,2);  //recorta
-end;
-procedure TPIC16.SetCommonRAM(AValue: boolean);
-begin
-//  if FCommonRAM=AValue then Exit;
-  bank0.LastMapped:=false;  //siempre
-  if FCommonRAM then begin
-    bank1.LastMapped:=true;
-    bank2.LastMapped:=true;
-    bank3.LastMapped:=true;
-  end else begin
-    bank1.LastMapped:=false;
-    bank2.LastMapped:=false;
-    bank3.LastMapped:=false;
-  end;
 end;
 procedure TPIC16.GenHexExAdd(Data: word);
 //Agrega una línea de Extended Address al archivo *.hex
@@ -962,6 +988,14 @@ begin
     Result := 'Invalid'
   end;
 end;
+procedure TPIC16.SetGPRStart(AValue: integer);
+begin
+  FGPRStart:=AValue;
+  bank0.GPRStart:=AValue;
+  bank1.GPRStart:=AValue;
+  bank2.GPRStart:=AValue;
+  bank3.GPRStart:=AValue;
+end;
 
 //funciones para la memoria RAM
 function TPIC16.GetFreeBit(var offs, bnk, bit: byte): boolean;
@@ -1171,7 +1205,7 @@ var
 begin
   for i:=0 to high(ram) do begin
     ram[i].value := $00;
-    ram[i].usado := 0;
+    ram[i].used := 0;
     ram[i].name:='';
   end;
 end;
@@ -1319,18 +1353,21 @@ begin
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
   GPRStart:=$20;   //dirección de inicio de los registros de usuario
-
   bank0.Init($000, nil   , @ram);
   bank1.Init($080, @bank0, @ram);
   bank2.Init($100, @bank0, @ram);
   bank3.Init($180, @bank0, @ram);
+  //inicia una configuración común
+  bank0.InitStateMem(0,$7F, cs_enabled);
+  bank1.InitStateMem(0,$7F, cs_enabled);
+  bank2.InitStateMem(0,$7F, cs_enabled);
+  bank3.InitStateMem(0,$7F, cs_enabled);
 
   page0.Init($0000          , @flash);
   page1.Init(1*PIC_PAGE_SIZE, @flash);
   page2.Init(2*PIC_PAGE_SIZE, @flash);
   page3.Init(3*PIC_PAGE_SIZE, @flash);
 
-  CommonRAM:=true; //los últimos 16 bytes están mapeados en el banco 0
   //estado inicial
   iFlash := 0;   //posición de inicio
   ClearMemRAM;
@@ -1342,7 +1379,8 @@ begin
   inherited Destroy;
 end;
 
-initialization
+procedure InitTables;
+begin
   //Inicializa Mnemónico de instrucciones
   PIC16InstName[ADDWF ] := 'ADDWF';
   PIC16InstName[ANDWF ] := 'ANDWF';
@@ -1425,5 +1463,8 @@ initialization
   PIC16InstSyntax[SUBLW ] := 'k';
   PIC16InstSyntax[XORLW ] := 'k';
   PIC16InstSyntax[_Inval] := '<???>';
+end;
+initialization
+  InitTables;
 end.
 
