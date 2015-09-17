@@ -11,6 +11,10 @@ sintaxis de todas las instrucciones.
 * Se crea el tipo TPIC16CellState, para dar más información sobre la celda de memoria.
 * Se modifica el objeto TRAMBank para trabajar con TPIC16CellState.
 * Se elimina la propiedad CommonRAM, porque era muy general.
+* Se modifica InitStateMem(), para limitar la dirección a 7 bits.
+* Se agrega la unidad PIC16Devices, para incluir las rutinas de configuración de las
+arquitecturas de los PIC.
+
 Descripción
 ===========
 Unidad con utilidades para la programación de microcontroladores PIC de rango
@@ -87,8 +91,9 @@ type  //tipos para instrucciones
 
 type //Modelo de la memoria RAM
   TPIC16CellState = (
-     cs_enabled,    //habilitado para uso
-     cs_disabled,   //deshabilitado para uso
+     cs_impleSFR,   //Registros de funciones especiales. Habilitado para uso.
+     cs_impleGPR,   //Registros de uso general. Habilitado para uso.
+     cs_unimplem,   //No implementado
      cs_mapToBnk    {mapeado en otro banco. No se indica específicamente a qué banco está
                      mapeado, porque lo más práctico es tener una referencia al banco, y
                      eso es trabajo de TRAMBank.}
@@ -116,6 +121,7 @@ type //Modelo de la memoria RAM
     procedure Setmem(i : byte; AValue: TPIC16RamCell);
     function AvailBit(const i: byte): boolean;
     function AvailByte(const i: byte): boolean;
+    function UsedByte(const i: byte): boolean;
   public
     procedure Init(AddrStart0: word; BankMapped0: ptrRAMBank; ram0:ptrPIC16Ram);  //inicia objeto
     property mem[i : byte] : TPIC16RamCell read Getmem write Setmem;
@@ -127,7 +133,7 @@ type //Modelo de la memoria RAM
     function GetFreeBytes(const size: integer; var offs: byte): boolean;  //obtiene una dirección libre
     function TotalGPR: byte; //total de bytes que contiene para el usuario
     function UsedGPR: byte;  //total de bytes usados por el usuario
-    procedure InitStateMem(i1, i2: byte; status0: TPIC16CellState);  //inicia la memoria
+//    procedure InitStateMem(i1, i2: byte; status0: TPIC16CellState);  //inicia la memoria
   end;
 
 type  //Modelos de la memoria Flash
@@ -199,9 +205,12 @@ type
     Npins    : byte;      //número de pines
     iFlash   : integer;   //puntero a la memoria Flash, para escribir
     frequen  : integer;   //frecuencia del reloj
+    MaxFreq  : integer;   //máxima frecuencia del reloj
     //Propiedades que definen la arquitectura del PIC destino.
     NumBanks: byte;      //Número de bancos de RAM.
     NumPages: byte;      //Número de páginas de memoria Flash.
+    MaxFlash: integer;   {Máximo número de celdas de flash implementadas (solo en los casos de
+                         implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
     bank0, bank1, bank2, bank3: TRAMBank;  //bancos de memoria RAM
     page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
     property GPRStart: integer read FGPRStart write SetGPRStart;   //dirección de inicio de los registros de usuario
@@ -214,6 +223,8 @@ type
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
     function ValidRAMaddr(addr: word): boolean;  //indica si una posición de memoria es válida
     procedure ClearMemRAM;
+    procedure DisableAllRAM;
+    procedure SetStateRAM(i1, i2: word; status0: TPIC16CellState; MappedTo: byte = $FF);
     function BankToAbsRAM(const offset, bank: byte): word; //devuelve dirección absoluta
     procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
     procedure SetNameRAM(const addr: word; const bnk: byte; const nam: string);  //agrega nombre a una celda de RAM
@@ -279,14 +290,20 @@ end;
 function TRAMBank.AvailBit(const i: byte): boolean; inline;
 {Indica si hay un bit disponible en la posición de memoria indicada}
 begin
-  Result := (ram^[i+AddrStart].state = cs_enabled) and
+  Result := (ram^[i+AddrStart].state = cs_impleGPR) and
             (ram^[i+AddrStart].used <> 255);
 end;
 function TRAMBank.AvailByte(const i: byte): boolean; inline;
 {Indica si hay un byte disponible en la posición de memoria indicada}
 begin
-  Result := (ram^[i+AddrStart].state = cs_enabled) and
+  Result := (ram^[i+AddrStart].state = cs_impleGPR) and
             (ram^[i+AddrStart].used = 0);
+end;
+function TRAMBank.UsedByte(const i: byte): boolean; inline;
+{Indica si hay un byte está usado en la posición de memoria indicada}
+begin
+  Result := (ram^[i+AddrStart].state = cs_impleGPR) and
+            (ram^[i+AddrStart].used <> 0);
 end;
 function TRAMBank.HaveConsecGPR(const i, n: byte): boolean;
 {Indica si hay "n" bytes consecutivos libres en la posicióm "i", en este banco de la RAM}
@@ -393,7 +410,7 @@ var
 begin
   Result := 0;
   for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
-    if ram^[i+AddrStart].state = cs_enabled then
+    if ram^[i+AddrStart].state = cs_impleGPR then
       inc(Result);
   end;
 end;
@@ -403,19 +420,21 @@ var
 begin
   Result := 0;
   for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
-    if AvailByte(i) then
+    if UsedByte(i) then
       inc(Result);
   end;
 end;
-procedure TRAMBank.InitStateMem(i1, i2: byte; status0: TPIC16CellState);
+{procedure TRAMBank.InitStateMem(i1, i2: byte; status0: TPIC16CellState);
 {Inicia el campo State, de la memoria. Permite definir el estado real de la memoria RAM}
 var
   i: Byte;
 begin
+  i1 := i1 and $7f;  //solo considera 7 bits
+  i2 := i2 and $7f;  //solo considera 7 bits
   for i:=i1 to i2 do begin  //verifica 1 a 1, por seguridad
     ram^[i+AddrStart].state := status0;
   end;
-end;
+end;}
 
 { TFlashPage }
 function TFlashPage.Getmem(i: word): TPIC16FlashCell;
@@ -1209,7 +1228,49 @@ begin
     ram[i].name:='';
   end;
 end;
-
+procedure TPIC16.DisableAllRAM;
+var
+  i: Integer;
+begin
+  for i:=0 to high(ram) do begin
+    ram[i].state := cs_unimplem;
+  end;
+end;
+procedure TPIC16.SetStateRAM(i1, i2: word; status0: TPIC16CellState;
+                             MappedTo: byte = $FF);
+{Inicia el campo State, de la memoria. Permite definir el estado real de la memoria RAM.
+"MappedTo", indica el número de banco al cual está mapeada la sección de memoria indicada,
+cuando se pone "status0" en "cs_mapToBnk". En los otrso estados no es útil.
+Esta función es hasta cierto punto redundante con TRAMBank.InitStateMem(), pero funciona con
+direciones absolutas, muy útil para iniciar el estado físico de la memoria}
+var
+  i: Integer;
+  nbnk: byte;
+  bnk: TRAMBank;
+begin
+  for i:=i1 to i2 do begin  //verifica 1 a 1, por seguridad
+    ram[i].state := status0;
+  end;
+  if MappedTo=$FF then begin
+    //no está mapeado
+  end else begin
+    //se especificó un banco destino
+    nbnk := (i1 >> 7);  //calcula el banco
+    case nbnk of   //hay referencia
+    0: bnk := bank0;
+    1: bnk := bank1;
+    2: bnk := bank2;
+    3: bnk := bank3;
+    end;
+    //asigna referencia
+    case MappedTo of
+    0: bnk.BankMapped:=@bank0;
+    1: bnk.BankMapped:=@bank1;
+    2: bnk.BankMapped:=@bank2;
+    3: bnk.BankMapped:=@bank3;
+    end;
+  end;
+end;
 function TPIC16.BankToAbsRAM(const offset, bank: byte): word;
 {Convierte una dirección y banco a una dirección absoluta}
 begin
@@ -1237,7 +1298,16 @@ end;
 //funciones para la memoria Flash
 function TPIC16.TotalMemFlash: word;
 begin
-  Result := NumPages * PIC_PAGE_SIZE;
+  if NumPages=1 then begin
+    //puede que no tenga toda la página disponible
+    if MaxFlash<>0 then begin
+      Result := MaxFlash;
+    end else begin
+      Result := PIC_PAGE_SIZE;
+    end;
+  end else begin
+    Result := NumPages * PIC_PAGE_SIZE;
+  end;
 end;
 function TPIC16.UsedMemFlash: word;
 begin
@@ -1358,10 +1428,8 @@ begin
   bank2.Init($100, @bank0, @ram);
   bank3.Init($180, @bank0, @ram);
   //inicia una configuración común
-  bank0.InitStateMem(0,$7F, cs_enabled);
-  bank1.InitStateMem(0,$7F, cs_enabled);
-  bank2.InitStateMem(0,$7F, cs_enabled);
-  bank3.InitStateMem(0,$7F, cs_enabled);
+  DisableAllRAM;
+  SetStateRAM($020, $04F, cs_impleGPR);
 
   page0.Init($0000          , @flash);
   page1.Init(1*PIC_PAGE_SIZE, @flash);
