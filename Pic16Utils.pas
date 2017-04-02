@@ -1,19 +1,4 @@
-{PIC16 16Utils 0.4b
-Cambios
-=======
-* Se crea una nueva forma de la sintaxis ("a") usada para llenar la tabla PIC16InstSyntax[].
-* Se cambia de nombre a las instrucciones codAsm(), en lugar de sobrecargarlas, para hacerlas
-menos propensas a confusión y separar mejor a las categorías.
-* Se crean dos nuevas formas de las instruccioens codASM(), para separar claramente las
-sintaxis de todas las instrucciones.
-* Se agrega nuevos campos a TPIC16, para modelar mejor la arquitectura del PIC
-* Se hacen públicos algunos campos, para facilitar la configuración del hardware
-* Se crea el tipo TPIC16CellState, para dar más información sobre la celda de memoria.
-* Se modifica el objeto TRAMBank para trabajar con TPIC16CellState.
-* Se elimina la propiedad CommonRAM, porque era muy general.
-* Se modifica InitStateMem(), para limitar la dirección a 7 bits.
-* Se agrega la unidad PIC16Devices, para incluir las rutinas de configuración de las
-arquitecturas de los PIC.
+{PIC16Utils
 
 Descripción
 ===========
@@ -104,28 +89,29 @@ type //Modelo de la memoria RAM
     name   : string;   //name of the record
     state  : TPIC16CellState;  //status of the cell
   end;
+  TPIC16RamCellPtr = ^TPIC16RamCell;
   TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
-  ptrPIC16Ram = ^TPIC16Ram;
+  PIC16RamPtr = ^TPIC16Ram;
 
   {Representa a un banco de memoria del PIC. En un banco las direcciones de memoria
    se mapean siempre desde $00 hasta $7F. No almacenan datos, solo usan referencias.}
   ptrRAMBank = ^TRAMBank;
   { TRAMBank }
   TRAMBank = object
-    ram    : ptrPIC16Ram;     //puntero a memoria RAM
+    ramPtr    : PIC16RamPtr;     //puntero a memoria RAM
     AddrStart: word;          //dirección de inicio en la memoria RAM total
     BankMapped: ptrRAMBank;   //banco al que están mapeados los últimos bytes
     GPRStart  : byte;         //dirección de inicio de registros para el usuario
   private
-    function Getmem(i : byte): TPIC16RamCell;
-    procedure Setmem(i : byte; AValue: TPIC16RamCell);
+    function Getmem(i : byte): TPIC16RamCellPtr;
+//    procedure Setmem(i : byte; AValue: TPIC16RamCellPtr);
     function AvailBit(const i: byte): boolean;
     function AvailByte(const i: byte): boolean;
     function UsedByte(const i: byte): boolean;
   public
-    procedure Init(AddrStart0: word; BankMapped0: ptrRAMBank; ram0:ptrPIC16Ram);  //inicia objeto
-    property mem[i : byte] : TPIC16RamCell read Getmem write Setmem;
-    //Funciones para administración de la memoria RAM
+    procedure Init(AddrStart0: word; BankMapped0: ptrRAMBank; ram0:PIC16RamPtr);  //inicia objeto
+    property mem[i : byte] : TPIC16RamCellPtr read Getmem;
+    //Funciones para administración de la memoria ramPtr
     function HaveConsecGPR(const i, n: byte): boolean; //Indica si hay "n" bytes libres
     procedure UseConsecGPR(const i, n: byte);  //Ocupa "n" bytes en la posición "i"
     function GetFreeBit(var offs, bit: byte): boolean;  //obtiene una dirección libre
@@ -259,52 +245,52 @@ var  //variables globales
 
 implementation
 { TRAMBank }
-function TRAMBank.Getmem(i: byte): TPIC16RamCell;
+function TRAMBank.Getmem(i: byte): TPIC16RamCellPtr;
 begin
   //Se asume que i debe ser menor que $7F
-  if ram^[i+AddrStart].state = cs_mapToBnk then begin
+  if ramPtr^[i+AddrStart].state = cs_mapToBnk then begin
     //estas direcciones están mapeadas en otro banco
     Result := BankMapped^.mem[i];
   end else begin  //caso normal
-    Result := ram^[i+AddrStart];
+    Result := @(ramPtr^[i+AddrStart]);
   end;
 end;
-procedure TRAMBank.Setmem(i: byte; AValue: TPIC16RamCell);
-//Escribe en un banco de memoria
-begin
-  //Se asume que i debe ser menor que $7F
-  if ram^[i+AddrStart].state = cs_mapToBnk then begin
-    //estas direcciones están mapeadas en otro banco
-    BankMapped^.mem[i] := AValue;
-  end else begin  //caso normal
-    ram^[i+AddrStart] := AValue;
-  end;
-end;
+//procedure TRAMBank.Setmem(i: byte; AValue: TPIC16RamCellPtr);
+////Escribe en un banco de memoria
+//begin
+//  //Se asume que i debe ser menor que $7F
+//  if ram^[i+AddrStart].state = cs_mapToBnk then begin
+//    //estas direcciones están mapeadas en otro banco
+//    BankMapped^.mem[i] := AValue;
+//  end else begin  //caso normal
+//    ram^[i+AddrStart] := AValue;
+//  end;
+//end;
 procedure TRAMBank.Init(AddrStart0: word; BankMapped0: ptrRAMBank;
-  ram0: ptrPIC16Ram);
+  ram0: PIC16RamPtr);
 begin
   AddrStart :=AddrStart0;
   BankMapped:=BankMapped0;
-  ram       :=ram0;
+  ramPtr       :=ram0;
   GPRStart := $20;  //dirección de inicio de GPR por defecto
 end;
 function TRAMBank.AvailBit(const i: byte): boolean; inline;
 {Indica si hay al menos un bit disponible, en la posición de memoria indicada}
 begin
-  Result := (ram^[i+AddrStart].state = cs_impleGPR) and
-            (ram^[i+AddrStart].used <> 255);
+  Result := (ramPtr^[i+AddrStart].state = cs_impleGPR) and
+            (ramPtr^[i+AddrStart].used <> 255);
 end;
 function TRAMBank.AvailByte(const i: byte): boolean; inline;
 {Indica si hay un byte disponible en la posición de memoria indicada}
 begin
-  Result := (ram^[i+AddrStart].state = cs_impleGPR) and
-            (ram^[i+AddrStart].used = 0);
+  Result := (ramPtr^[i+AddrStart].state = cs_impleGPR) and
+            (ramPtr^[i+AddrStart].used = 0);
 end;
 function TRAMBank.UsedByte(const i: byte): boolean; inline;
 {Indica si hay un byte está usado en la posición de memoria indicada}
 begin
-  Result := (ram^[i+AddrStart].state = cs_impleGPR) and
-            (ram^[i+AddrStart].used <> 0);
+  Result := (ramPtr^[i+AddrStart].state = cs_impleGPR) and
+            (ramPtr^[i+AddrStart].used <> 0);
 end;
 function TRAMBank.HaveConsecGPR(const i, n: byte): boolean;
 {Indica si hay "n" bytes consecutivos libres en la posicióm "i", en este banco de la RAM}
@@ -331,7 +317,7 @@ procedure TRAMBank.UseConsecGPR(const i, n: byte);
 var j: byte;
 begin
   for j:=i to i+n-1 do begin
-    ram^[j+AddrStart].used:=255;  //todos los bits
+    ramPtr^[j+AddrStart].used:=255;  //todos los bits
     //    mem[j].used := true;   //no se puede
   end;
 end;
@@ -346,26 +332,25 @@ begin
       //encontró
       offs := i;  //devuelve dirección
       //busca el bit libre
-      if          (mem[i].used and %00000001) = 0 then begin
+      if          (mem[i]^.used and %00000001) = 0 then begin
         bit:=0;
-      end else if (mem[i].used and %00000010) = 0 then begin
+      end else if (mem[i]^.used and %00000010) = 0 then begin
         bit:=1
-      end else if (mem[i].used and %00000100) = 0 then begin
+      end else if (mem[i]^.used and %00000100) = 0 then begin
         bit:=2
-      end else if (mem[i].used and %00001000) = 0 then begin
+      end else if (mem[i]^.used and %00001000) = 0 then begin
         bit:=3
-      end else if (mem[i].used and %00010000) = 0 then begin
+      end else if (mem[i]^.used and %00010000) = 0 then begin
         bit:=4
-      end else if (mem[i].used and %00100000) = 0 then begin
+      end else if (mem[i]^.used and %00100000) = 0 then begin
         bit:=5
-      end else if (mem[i].used and %01000000) = 0 then begin
+      end else if (mem[i]^.used and %01000000) = 0 then begin
         bit:=6
-      end else if (mem[i].used and %10000000) = 0 then begin
+      end else if (mem[i]^.used and %10000000) = 0 then begin
         bit:=7
       end;
-      mem[i].used := mem[i].used or (byte(1)>>bit); //marca bit usado
-debugln('%x', [mem[i]used]);
-      //Notar  que escribir en mem[], puede escribir en otro banco mapeado
+      mem[i]^.used := mem[i]^.used or (byte(1)<<bit); //marca bit usado
+      //Notar que la posición de memoria puede estar mapeada a otro banco.
       Result := true;  //indica que encontró espacio
       exit;
     end;
@@ -381,7 +366,7 @@ begin
     if AvailByte(i)  then begin
       //encontró
 //      mem[i].used:=true;  //marca como usado
-      ram^[i+AddrStart].used:=255;   //marca como usado
+      ramPtr^[i+AddrStart].used:=255;   //marca como usado
       offs := i;  //devuelve dirección
       Result := true;  //indica que encontró espacio
       exit;
@@ -413,7 +398,7 @@ var
 begin
   Result := 0;
   for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
-    if ram^[i+AddrStart].state = cs_impleGPR then
+    if ramPtr^[i+AddrStart].state = cs_impleGPR then
       inc(Result);
   end;
 end;
@@ -529,7 +514,7 @@ procedure TPIC16.codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin
 begin
   case inst of
   ADDWF : flash[iFlash].value := %00011100000000 + ord(d) + f;
-  ANDWF : flash[iFlash].value := %00011100000000 + ord(d) + f;
+  ANDWF : flash[iFlash].value := %00010100000000 + ord(d) + f;
   COMF  : flash[iFlash].value := %00100100000000 + ord(d) + f;
   DECF  : flash[iFlash].value := %00001100000000 + ord(d) + f;
   DECFSZ: flash[iFlash].value := %00101100000000 + ord(d) + f;

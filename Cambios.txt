@@ -1,0 +1,24 @@
+0.5
+===
+Se cambia el nombre del tipo ptrPIC16Ram a PIC16RamPtr.
+Se crea el tipo TPIC16RamCellPtr.
+Se cambia el tipo de TRAMBank.mem[] a TPIC16RamCellPtr;
+Se cambia el nombre de TRAMBank.ram por TRAMBank.ramPtr
+Se corrige TRAMBank.GetFreeBit(), para que actualice correctamente el bit usado.
+Se corrige un eror en TPIC16.codAsmFD(), en la instrucción ANDWF.
+
+0.4
+===
+* Se crea una nueva forma de la sintaxis ("a") usada para llenar la tabla PIC16InstSyntax[].
+* Se cambia de nombre a las instrucciones codAsm(), en lugar de sobrecargarlas, para hacerlas
+menos propensas a confusión y separar mejor a las categorías.
+* Se crean dos nuevas formas de las instruccioens codASM(), para separar claramente las
+sintaxis de todas las instrucciones.
+* Se agrega nuevos campos a TPIC16, para modelar mejor la arquitectura del PIC
+* Se hacen públicos algunos campos, para facilitar la configuración del hardware
+* Se crea el tipo TPIC16CellState, para dar más información sobre la celda de memoria.
+* Se modifica el objeto TRAMBank para trabajar con TPIC16CellState.
+* Se elimina la propiedad CommonRAM, porque era muy general.
+* Se modifica InitStateMem(), para limitar la dirección a 7 bits.
+* Se agrega la unidad PIC16Devices, para incluir las rutinas de configuración de las
+arquitecturas de los PIC.
