@@ -104,11 +104,12 @@ var
   l: String;
   idInst: TPIC16Inst;
   Inst: String;
-  stx: String;
+  stx, lin: String;
   f, k, b: word;
 begin
   pic.iFlash:=0;      //for start to code at $0000
-  for l in Memo1.Lines do begin
+  for lin in Memo1.Lines do begin
+    l := lin;   //crea copia para modificar
     if trim(l) = '' then continue;
     if not ExtractString(l, Inst) then begin  //extract mnemonic
       Application.MessageBox('Syntax Error','');
