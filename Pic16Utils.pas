@@ -1118,55 +1118,27 @@ function TPIC16.GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;
  del tamaño indicado. Si encuentra espacio, devuelve TRUE.
  El tamaño se da en bytes, pero si el valor es negativo, se entiende que es en bits.}
 begin
-  Result := false;   //valor inicial
-  if NumBanks = 2 then begin
-    //solo 2 bancos
-    if bank0.GetFreeBytes(size, offs) then begin
-      bnk := 0;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank1.GetFreeBytes(size, offs) then begin
-      bnk := 1;      //encontró en este banco
-      Result := true;
-      exit;
-    end;
-  end else if NumBanks = 3 then begin
-    //3 bancos
-    if bank0.GetFreeBytes(size, offs) then begin
-      bnk := 0;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank1.GetFreeBytes(size, offs) then begin
-      bnk := 1;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank2.GetFreeBytes(size, offs) then begin
-      bnk := 2;      //encontró en este banco
-      Result := true;
-      exit;
-    end;
-  end else begin
-    //se asume 4 bancos
-    if bank0.GetFreeBytes(size, offs) then begin
-      bnk := 0;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank1.GetFreeBytes(size, offs) then begin
-      bnk := 1;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank2.GetFreeBytes(size, offs) then begin
-      bnk := 2;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank3.GetFreeBytes(size, offs) then begin
-      bnk := 3;      //encontró en este banco
-      Result := true;
-      exit;
-    end;
+  //se asume 4 bancos
+  if          (NumBanks>0) and bank0.GetFreeBytes(size, offs) then begin
+    bnk := 0;      //encontró en este banco
+    Result := true;
+    exit;
+  end else if (NumBanks>1) and bank1.GetFreeBytes(size, offs) then begin
+    bnk := 1;      //encontró en este banco
+    Result := true;
+    exit;
+  end else if (NumBanks>2) and bank2.GetFreeBytes(size, offs) then begin
+    bnk := 2;      //encontró en este banco
+    Result := true;
+    exit;
+  end else if (NumBanks>3) and bank3.GetFreeBytes(size, offs) then begin
+    bnk := 3;      //encontró en este banco
+    Result := true;
+    exit;
   end;
+  Result := false;   //valor inicial
   {si llegó aquí es porque no encontró la memoria solicitada,
-  al menos de ese tamaño}
+  al menos de ese tamaño, o no hay bancos.}
 end;
 function TPIC16.FreeMemRAM(const size: integer; var addr: word): boolean;
 begin

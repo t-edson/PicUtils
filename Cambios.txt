@@ -6,6 +6,7 @@ Se cambia el tipo de TRAMBank.mem[] a TPIC16RamCellPtr;
 Se cambia el nombre de TRAMBank.ram por TRAMBank.ramPtr
 Se corrige TRAMBank.GetFreeBit(), para que actualice correctamente el bit usado.
 Se corrige un eror en TPIC16.codAsmFD(), en la instrucción ANDWF.
+Se modifica la rutina TPIC16.GetFreeBytes(), para manejar casos de un solo banco.
 
 0.4
 ===
