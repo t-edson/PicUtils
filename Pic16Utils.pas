@@ -1123,15 +1123,18 @@ begin
     bnk := 0;      //encontró en este banco
     Result := true;
     exit;
-  end else if (NumBanks>1) and bank1.GetFreeBytes(size, offs) then begin
+  end;
+  if (NumBanks>1) and bank1.GetFreeBytes(size, offs) then begin
     bnk := 1;      //encontró en este banco
     Result := true;
     exit;
-  end else if (NumBanks>2) and bank2.GetFreeBytes(size, offs) then begin
+  end;
+  if (NumBanks>2) and bank2.GetFreeBytes(size, offs) then begin
     bnk := 2;      //encontró en este banco
     Result := true;
     exit;
-  end else if (NumBanks>3) and bank3.GetFreeBytes(size, offs) then begin
+  end;
+  if (NumBanks>3) and bank3.GetFreeBytes(size, offs) then begin
     bnk := 3;      //encontró en este banco
     Result := true;
     exit;
