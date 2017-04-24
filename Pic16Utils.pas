@@ -92,13 +92,15 @@ type //Modelo de la memoria RAM
   TPIC16RamCellPtr = ^TPIC16RamCell;
   TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
   PIC16RamPtr = ^TPIC16Ram;
-
+  TRutExplorRAM = procedure(offs, bnk: byte; regPtr: TPIC16RamCellPtr) of object;
   {Representa a un banco de memoria del PIC. En un banco las direcciones de memoria
    se mapean siempre desde $00 hasta $7F. No almacenan datos, solo usan referencias.}
   ptrRAMBank = ^TRAMBank;
   { TRAMBank }
   TRAMBank = object
-    ramPtr    : PIC16RamPtr;     //puntero a memoria RAM
+  public
+    numBank  : integer;       //Número de banco
+    ramPtr    : PIC16RamPtr;  //Puntero a memoria RAM
     AddrStart: word;          //dirección de inicio en la memoria RAM total
     BankMapped: ptrRAMBank;   //banco al que están mapeados los últimos bytes
     GPRStart  : byte;         //dirección de inicio de registros para el usuario
@@ -109,7 +111,7 @@ type //Modelo de la memoria RAM
     function AvailByte(const i: byte): boolean;
     function UsedByte(const i: byte): boolean;
   public
-    procedure Init(AddrStart0: word; BankMapped0: ptrRAMBank; ram0:PIC16RamPtr);  //inicia objeto
+    procedure Init(num:byte; AddrStart0: word; BankMapped0: ptrRAMBank; ram0:PIC16RamPtr);  //inicia objeto
     property mem[i : byte] : TPIC16RamCellPtr read Getmem;
     //Funciones para administración de la memoria ramPtr
     function HaveConsecGPR(const i, n: byte): boolean; //Indica si hay "n" bytes libres
@@ -117,6 +119,7 @@ type //Modelo de la memoria RAM
     function GetFreeBit(var offs, bit: byte): boolean;  //obtiene una dirección libre
     function GetFreeByte(var offs: byte): boolean;     //obtiene una dirección libre
     function GetFreeBytes(const size: integer; var offs: byte): boolean;  //obtiene una dirección libre
+    procedure ExploreUsed(rutExplorRAM: TRutExplorRAM);  //Explora uno a uno los bytes usados
     function TotalGPR: byte; //total de bytes que contiene para el usuario
     function UsedGPR: byte;  //total de bytes usados por el usuario
 //    procedure InitStateMem(i1, i2: byte; status0: TPIC16CellState);  //inicia la memoria
@@ -205,15 +208,17 @@ type
     function GetFreeByte(var offs, bnk: byte): boolean;
     function GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;  //obtiene una dirección libre
     function FreeMemRAM(const size: integer; var addr: word): boolean;  //libera una dirección usada
-    function TotalMemRAM: word;  //devuelve el total de memoria RAM
+    function TotalMemRAM: word; //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
+    function ExploreUsed(rutExplorRAM: TRutExplorRAM): word;    //devuelve un reporte del uso de la RAM
     function ValidRAMaddr(addr: word): boolean;  //indica si una posición de memoria es válida
     procedure ClearMemRAM;
     procedure DisableAllRAM;
     procedure SetStateRAM(i1, i2: word; status0: TPIC16CellState; MappedTo: byte = $FF);
     function BankToAbsRAM(const offset, bank: byte): word; //devuelve dirección absoluta
     procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
-    procedure SetNameRAM(const addr: word; const bnk: byte; const nam: string);  //agrega nombre a una celda de RAM
+    procedure SetNameRAM(const addr: word; const bnk: byte; const nam: string);  //Fija nombre a una celda de RAM
+    procedure AddNameRAM(const addr: word; const bnk: byte; const nam: string);  //Agrega nombre a una celda de RAM
     //funciones para la memoria Flash
     function TotalMemFlash: word;  //devuelve el total de memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
@@ -266,9 +271,10 @@ end;
 //    ram^[i+AddrStart] := AValue;
 //  end;
 //end;
-procedure TRAMBank.Init(AddrStart0: word; BankMapped0: ptrRAMBank;
+procedure TRAMBank.Init(num: byte; AddrStart0: word; BankMapped0: ptrRAMBank;
   ram0: PIC16RamPtr);
 begin
+  numBank := num;
   AddrStart :=AddrStart0;
   BankMapped:=BankMapped0;
   ramPtr       :=ram0;
@@ -287,7 +293,7 @@ begin
             (ramPtr^[i+AddrStart].used = 0);
 end;
 function TRAMBank.UsedByte(const i: byte): boolean; inline;
-{Indica si hay un byte está usado en la posición de memoria indicada}
+{Indica si se usa al menos un bit, del byte en la posición de memoria indicada.}
 begin
   Result := (ramPtr^[i+AddrStart].state = cs_impleGPR) and
             (ramPtr^[i+AddrStart].used <> 0);
@@ -390,7 +396,16 @@ begin
     end;
   end;
 end;
-
+procedure TRAMBank.ExploreUsed(rutExplorRAM: TRutExplorRAM);
+{Realiza una exploración de la memoria RAM usada y llama a rutExplorRAM(), para cada
+byte encontrado.}
+var
+  i: Byte;
+begin
+  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+    if UsedByte(i) then rutExplorRAM(i, 0, @ramPtr^[i+AddrStart]);
+  end;
+end;
 function TRAMBank.TotalGPR: byte;
 {Total de memoria disponible para el usuario}
 var
@@ -589,7 +604,6 @@ begin
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
-
 procedure TPIC16.codAsm(const inst: TPIC16Inst);
 //Codifica las instrucciones de control.
 begin
@@ -641,7 +655,6 @@ begin
     Result := _Inval;
   end;
 end;
-
 procedure TPIC16.addCommAsm(comm: string);
 {Agrega un comentario de línea al código en la posición de memoria actual}
 begin
@@ -1010,7 +1023,14 @@ function TPIC16.GetFreeBit(var offs, bnk, bit: byte): boolean;
  devuelve TRUE.}
 begin
   Result := false;   //valor inicial
-  if NumBanks = 2 then begin
+  if NumBanks = 1 then begin
+    //solo 1 banco
+    if bank0.GetFreeBit(offs,bit) then begin
+      bnk := 0;      //encontró en este banco
+      Result := true;
+      exit;
+    end;
+  end else if NumBanks = 2 then begin
     //solo 2 bancos
     if bank0.GetFreeBit(offs,bit) then begin
       bnk := 0;      //encontró en este banco
@@ -1064,7 +1084,14 @@ function TPIC16.GetFreeByte(var offs, bnk: byte): boolean;
  devuelve TRUE.}
 begin
   Result := false;   //valor inicial
-  if NumBanks = 2 then begin
+  if NumBanks = 1 then begin
+    //solo 1 banco
+    if bank0.GetFreeByte(offs) then begin
+      bnk := 0;      //encontró en este banco
+      Result := true;
+      exit;
+    end;
+  end else if NumBanks = 2 then begin
     //solo 2 bancos
     if bank0.GetFreeByte(offs) then begin
       bnk := 0;      //encontró en este banco
@@ -1151,6 +1178,7 @@ function TPIC16.TotalMemRAM: word;
 {Devuelve el total de memoria RAM disponible}
 begin
   case NumBanks of
+  1: Result := bank0.TotalGPR;
   2: Result := bank0.TotalGPR + bank1.TotalGPR;
   3: Result := bank0.TotalGPR + bank1.TotalGPR + bank2.TotalGPR;
   4: Result := bank0.TotalGPR + bank1.TotalGPR + bank2.TotalGPR + bank3.TotalGPR;
@@ -1160,15 +1188,43 @@ function TPIC16.UsedMemRAM: word;
 {Devuelve el total de memoria RAM usada}
 begin
   case NumBanks of
+  1: Result := bank0.UsedGPR;
   2: Result := bank0.UsedGPR + bank1.UsedGPR;
   3: Result := bank0.UsedGPR + bank1.UsedGPR + bank2.UsedGPR;
   4: Result := bank0.UsedGPR + bank1.UsedGPR + bank2.UsedGPR + bank3.UsedGPR;
+  end;
+end;
+function TPIC16.ExploreUsed(rutExplorRAM: TRutExplorRAM): word;
+{Genera un reporte de uso de RAM}
+begin
+  case NumBanks of
+  1: begin
+      bank0.ExploreUsed(rutExplorRAM);
+     end;
+  2: begin
+      bank0.ExploreUsed(rutExplorRAM);
+      bank1.ExploreUsed(rutExplorRAM);
+    end;
+  3: begin
+      bank0.ExploreUsed(rutExplorRAM);
+      bank1.ExploreUsed(rutExplorRAM);
+      bank2.ExploreUsed(rutExplorRAM);
+    end;
+  4: begin
+      bank0.ExploreUsed(rutExplorRAM);
+      bank1.ExploreUsed(rutExplorRAM);
+      bank2.ExploreUsed(rutExplorRAM);
+      bank3.ExploreUsed(rutExplorRAM);
+    end;
   end;
 end;
 function TPIC16.ValidRAMaddr(addr: word): boolean;
 {Indica si la dirercción indicada es váldia dentro del hardware del PIC}
 begin
   case NumBanks of
+  1: begin
+      if addr > $80 then exit(false);   //excede límite
+  end;
   2: begin
       if addr > $100 then exit(false);   //excede límite
   end;
@@ -1257,7 +1313,17 @@ procedure TPIC16.SetNameRAM(const addr: word; const bnk: byte; const nam: string
 begin
    ram[BankToAbsRAM(addr, bnk)].name:=nam;
 end;
-
+procedure TPIC16.AddNameRAM(const addr: word; const bnk: byte; const nam: string
+  );
+{Escribe en el campo "name" de la RAM en la psoición indicada. Si ya existía un nombre,
+lo argega después de una coma.}
+begin
+  if ram[BankToAbsRAM(addr, bnk)].name = '' then begin
+    ram[BankToAbsRAM(addr, bnk)].name:=nam;
+  end else begin
+    ram[BankToAbsRAM(addr, bnk)].name+=','+nam;
+  end;
+end;
 //funciones para la memoria Flash
 function TPIC16.TotalMemFlash: word;
 begin
@@ -1386,10 +1452,10 @@ begin
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
   GPRStart:=$20;   //dirección de inicio de los registros de usuario
-  bank0.Init($000, nil   , @ram);
-  bank1.Init($080, @bank0, @ram);
-  bank2.Init($100, @bank0, @ram);
-  bank3.Init($180, @bank0, @ram);
+  bank0.Init(0, $000, nil   , @ram);
+  bank1.Init(1, $080, @bank0, @ram);
+  bank2.Init(2, $100, @bank0, @ram);
+  bank3.Init(3, $180, @bank0, @ram);
   //inicia una configuración común
   DisableAllRAM;
   SetStateRAM($020, $04F, cs_impleGPR);

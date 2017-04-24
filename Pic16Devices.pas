@@ -52,6 +52,8 @@ procedure GetSupportedDevices(list: TStrings);
 {Devuelve la lista de dispositivos soportados. Esta lista debe ser la misma que hay en
  GetHardwareInfo. }
 begin
+   list.Add('PIC12F629');
+   list.Add('PIC12F675');
    list.Add('PIC16F83');
    list.Add('PIC16CR83');
    list.Add('PIC16F84');
@@ -83,6 +85,16 @@ begin
    pic.MaxFreq := 0;
    pic.DisableAllRAM;
    case Upcase(model) of
+   'PIC12F629',
+   'PIC12F675': begin
+     pic.MaxFreq:=20000000;
+     pic.Npins := 8;
+     pic.NumBanks:=2;
+     pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
+     pic.GPRStart:=$20;
+     pic.SetStateRAM($20, $5F, cs_impleGPR);
+     pic.SetStateRAM($A0, $DF, cs_mapToBnk, 0);
+   end;
    'PIC16F83',
    'PIC16CR83': begin
      pic.MaxFreq:=10000000;

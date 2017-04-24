@@ -1,3 +1,11 @@
+0.6
+===
+Se amplían las rutinas para que consideren el caso de un solo banco de RAM.
+Se agrega el método TRAMBank.ExploreUsed(), para explorar la memoria usada.
+Se agrega el método TPIC16.ExploreUsed(), para explorar la memoria usada.
+Se agrega el campo TRAMBank.numBank y se incluye l ainicializació en el método Inic().
+Se agrega el método TPIC16.AddNameRAM(), para agregar una cadena al nombre de la RAM.
+
 0.5
 ===
 Se cambia el nombre del tipo ptrPIC16Ram a PIC16RamPtr.
