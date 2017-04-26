@@ -213,13 +213,16 @@ type
     function FreeMemRAM(const size: integer; var addr: word): boolean;  //libera una dirección usada
     function TotalMemRAM: word; //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
-    function ExploreUsed(rutExplorRAM: TRutExplorRAM): word;    //devuelve un reporte del uso de la RAM
+    procedure ExploreUsed(rutExplorRAM: TRutExplorRAM);    //devuelve un reporte del uso de la RAM
     function ValidRAMaddr(addr: word): boolean;  //indica si una posición de memoria es válida
     procedure ClearMemRAM;
     procedure DisableAllRAM;
     procedure SetStateRAM(i1, i2: word; status0: TPIC16CellState; MappedTo: byte = $FF);
     function BankToAbsRAM(const offset, bank: byte): word; //devuelve dirección absoluta
     procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
+    //funciones para manejo de nombres
+    function NameRAM(const addr: word; const bnk: byte): string;
+    function NameRAMbit(const addr: word; const bnk,bit: byte): string;
     procedure SetNameRAM(const addr: word; const bnk: byte; const nam: string);  //Fija nombre a una celda de RAM
     procedure AddNameRAM(const addr: word; const bnk: byte; const nam: string);  //Agrega nombre a una celda de RAM
     procedure SetNameRAMbit(const addr: word; const bnk, bit: byte; const nam: string);  //Fija nombre a un bitde RAM
@@ -970,9 +973,9 @@ begin
           Result := nemo + ram[f_].name + ',w';
       end else begin
         if d_ = toF then
-          Result := nemo + IntToHex(f_,3) + ',f'
+          Result := nemo + '0x'+IntToHex(f_,3) + ',f'
         else
-          Result := nemo + IntToHex(f_,3) + ',w';
+          Result := nemo + '0x'+IntToHex(f_,3) + ',w';
       end;
      end;
   CLRF,
@@ -980,7 +983,7 @@ begin
         if useVarName and (ram[f_].name<>'') then begin
           Result := nemo + ram[f_].name;
         end else begin
-          Result := nemo + IntToHex(f_,3);
+          Result := nemo + '0x'+IntToHex(f_,3);
         end;
      end;
   BCF,
@@ -994,7 +997,7 @@ begin
         //Hay nombre de byte
         Result := nemo + ram[f_].name + ', ' + IntToStr(b_);
       end else begin
-        Result := nemo + IntToHex(f_,3) + ', ' + IntToStr(b_);
+        Result := nemo + '0x'+IntToHex(f_,3) + ', ' + IntToStr(b_);
       end;
      end;
   ADDLW,
@@ -1006,7 +1009,7 @@ begin
   RETLW,
   SUBLW,
   XORLW: begin
-       Result := nemo + IntToHex(k_,3);
+       Result := nemo + '0x'+IntToHex(k_,2);
      end;
   CLRW,
   NOP,
@@ -1206,7 +1209,7 @@ begin
   4: Result := bank0.UsedGPR + bank1.UsedGPR + bank2.UsedGPR + bank3.UsedGPR;
   end;
 end;
-function TPIC16.ExploreUsed(rutExplorRAM: TRutExplorRAM): word;
+procedure TPIC16.ExploreUsed(rutExplorRAM: TRutExplorRAM);
 {Genera un reporte de uso de RAM}
 begin
   case NumBanks of
@@ -1257,6 +1260,14 @@ begin
     ram[i].value := $00;
     ram[i].used := 0;
     ram[i].name:='';
+    ram[i].bitname[0] := '';
+    ram[i].bitname[1] := '';
+    ram[i].bitname[2] := '';
+    ram[i].bitname[3] := '';
+    ram[i].bitname[4] := '';
+    ram[i].bitname[5] := '';
+    ram[i].bitname[6] := '';
+    ram[i].bitname[7] := '';
   end;
 end;
 procedure TPIC16.DisableAllRAM;
@@ -1318,7 +1329,15 @@ begin
    offset := AbsAddr and %01111111;
    bank :=  AbsAddr >> 7;
 end;
-
+function TPIC16.NameRAM(const addr: word; const bnk: byte): string;
+{Devuelve el nombre de una celda de la memoria RAM.}
+begin
+  Result := ram[BankToAbsRAM(addr, bnk)].name;
+end;
+function TPIC16.NameRAMbit(const addr: word; const bnk, bit: byte): string;
+begin
+  Result := ram[BankToAbsRAM(addr, bnk)].bitname[bit];
+end;
 procedure TPIC16.SetNameRAM(const addr: word; const bnk: byte; const nam: string
   );
 {Escribe en el campo "name" de la RAM en la psoición indicada}
