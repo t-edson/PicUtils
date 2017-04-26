@@ -3,10 +3,12 @@
 Se amplían las rutinas para que consideren el caso de un solo banco de RAM.
 Se agrega el método TRAMBank.ExploreUsed(), para explorar la memoria usada.
 Se agrega el método TPIC16.ExploreUsed(), para explorar la memoria usada.
-Se agrega el campo TRAMBank.numBank y se incluye l ainicializació en el método Inic().
-Se agrega el método TPIC16.AddNameRAM(), para agregar una cadena al nombre de la RAM.
+Se agrega el campo TRAMBank.numBank y se incluye la inicializació en el método Inic().
 Se agregan parámetros al método TPIC16.ShowCode(), para configurar la apariencia.
 Se modifica GetHardwareInfo(), para que actualice también el campo "Model" del PIC.
+Se agrega el campo "bitname" al registro TPICRamCell.
+Se agregan los métodos TPIC16.AddNameRAM() y SetNameRAMbit().
+Se modifica TPIC16.Disassembler(), para que incluya nombre de variables de tipo bit.
 
 0.5
 ===

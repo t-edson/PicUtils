@@ -87,7 +87,10 @@ type //Modelo de la memoria RAM
     value  : byte;     //value of the memory
     used   : byte;     //Bitmap. Indicates the used bits ($00->all free; $ff->all bits used.)
     name   : string;   //name of the record
+    bitname: array[0..7] of string;  //name of the bits.
     state  : TPIC16CellState;  //status of the cell
+    {Podemos usar un tamaño mediano para este registro, porque no esperamos tener muhcas
+    celdas de RAM (<1K).}
   end;
   TPIC16RamCellPtr = ^TPIC16RamCell;
   TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
@@ -125,7 +128,7 @@ type //Modelo de la memoria RAM
 //    procedure InitStateMem(i1, i2: byte; status0: TPIC16CellState);  //inicia la memoria
   end;
 
-type  //Modelos de la memoria Flash
+type  //Models for Flash memory
   TPIC16FlashCell = record
     value  : word;     //value of the memory
     used   : boolean;  //indicate if have been written
@@ -175,9 +178,9 @@ type
     procedure GenHexEOF;
     procedure GenHexExAdd(Data: word);
     function HexChecksum(const lin: string): string;
-    procedure ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr: boolean);
+    procedure ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom: boolean);
   private
-    FCommonRAM: boolean;
+//    FCommonRAM: boolean;
     function StrHexFlash(i1, i2: integer): string;
   private //campos para procesar instrucciones
     FGPRStart: integer;
@@ -219,6 +222,7 @@ type
     procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
     procedure SetNameRAM(const addr: word; const bnk: byte; const nam: string);  //Fija nombre a una celda de RAM
     procedure AddNameRAM(const addr: word; const bnk: byte; const nam: string);  //Agrega nombre a una celda de RAM
+    procedure SetNameRAMbit(const addr: word; const bnk, bit: byte; const nam: string);  //Fija nombre a un bitde RAM
     //funciones para la memoria Flash
     function TotalMemFlash: word;  //devuelve el total de memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
@@ -236,7 +240,7 @@ type
     procedure addCommAsm(comm: string);  //Add a comment to the ASM code
     procedure addCommAsm1(comm: string); //Add lateral comment to the ASM code
     procedure GenHex(hexFile: string);  //genera un archivo hex
-    procedure DumpCode(l: TStrings; incAdrr: boolean);  //vuelva en código que contiene
+    procedure DumpCode(l: TStrings; incAdrr, incCom: boolean);  //vuelva en código que contiene
   public
     constructor Create;
     destructor Destroy; override;
@@ -982,8 +986,16 @@ begin
   BCF,
   BSF,
   BTFSC,
-  BTFSS: begin
-       Result := nemo + IntToHex(f_,3) + ', ' + IntToStr(b_);
+  BTFSS: begin    //Instrucciones de bit
+      if useVarName and (ram[f_].bitname[b_]<>'') then begin
+        //Hay nombre de bit
+        Result := nemo + ram[f_].bitname[b_];
+      end else if useVarName and (ram[f_].name<>'') then begin
+        //Hay nombre de byte
+        Result := nemo + ram[f_].name + ', ' + IntToStr(b_);
+      end else begin
+        Result := nemo + IntToHex(f_,3) + ', ' + IntToStr(b_);
+      end;
      end;
   ADDLW,
   ANDLW,
@@ -1324,6 +1336,13 @@ begin
     ram[BankToAbsRAM(addr, bnk)].name+=','+nam;
   end;
 end;
+procedure TPIC16.SetNameRAMbit(const addr: word; const bnk, bit: byte;
+  const nam: string);
+begin
+  if (bit>7) then exit;
+  ram[BankToAbsRAM(addr, bnk)].bitname[bit] := nam;
+end;
+
 //funciones para la memoria Flash
 function TPIC16.TotalMemFlash: word;
 begin
@@ -1386,7 +1405,7 @@ begin
   GenHexComm('PIC16FXXXX');   //comentario
   hexLines.SaveToFile(hexFile);  //genera archivo
 end;
-procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr: boolean);
+procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom: boolean);
 {Muestra el código desensamblado de una página}
 var
   i, il: Word;
@@ -1413,39 +1432,43 @@ begin
     end;
     val := pag.mem[i].value;
     Decode(val);   //decodifica instrucción
-//    lOut.Add('    $'+IntToHex(i,4) + ':' +IntToHex(val,4)+ ' ' + Disassembler);
-    if comLin<>'' then  begin   //escribe comentario al inicio de línea
+    //Escribe comentario al inicio de línea
+    if incCom and (comLin<>'') then  begin
       lOut.Add(comLin);
     end;
     //Escribe línea
-    lin := Disassembler(true) + ' ' + comLat;
-    if incAdrr then  //Incluye dirección física
+    lin := Disassembler(true);
+    if incAdrr then  begin //Incluye dirección física
       lin := '$'+IntToHex(i,4) + ': ' + lin;
+    end;
+    if incCom then begin  //Incluye comentario lateral
+      lin := lin  + ' ' + comLat;
+    end;
     lOut.Add('    ' + lin);
   end;
 end;
-procedure TPIC16.DumpCode(l: TStrings; incAdrr: boolean);
+procedure TPIC16.DumpCode(l: TStrings; incAdrr, incCom: boolean);
 {Desensambla las instrucciones grabadas en el PIC.
  Se debe llamar despues de llamar a GenHex(), para que se actualicen las variables}
 begin
   case NumPages of
   1: begin
-      ShowCode(l, page0, incAdrr);
+      ShowCode(l, page0, incAdrr, incCom);
   end;
   2:begin
-      ShowCode(l, page0, incAdrr);
-      ShowCode(l, page1, incAdrr);
+      ShowCode(l, page0, incAdrr, incCom);
+      ShowCode(l, page1, incAdrr, incCom);
   end;
   3:begin
-      ShowCode(l, page0, incAdrr);
-      ShowCode(l, page1, incAdrr);
-      ShowCode(l, page2, incAdrr);
+      ShowCode(l, page0, incAdrr, incCom);
+      ShowCode(l, page1, incAdrr, incCom);
+      ShowCode(l, page2, incAdrr, incCom);
   end;
   4:begin
-      ShowCode(l, page0, incAdrr);
-      ShowCode(l, page1, incAdrr);
-      ShowCode(l, page2, incAdrr);
-      ShowCode(l, page3, incAdrr);
+      ShowCode(l, page0, incAdrr, incCom);
+      ShowCode(l, page1, incAdrr, incCom);
+      ShowCode(l, page2, incAdrr, incCom);
+      ShowCode(l, page3, incAdrr, incCom);
   end;
   end;
 end;
