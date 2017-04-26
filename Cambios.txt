@@ -5,6 +5,8 @@ Se agrega el método TRAMBank.ExploreUsed(), para explorar la memoria usada.
 Se agrega el método TPIC16.ExploreUsed(), para explorar la memoria usada.
 Se agrega el campo TRAMBank.numBank y se incluye l ainicializació en el método Inic().
 Se agrega el método TPIC16.AddNameRAM(), para agregar una cadena al nombre de la RAM.
+Se agregan parámetros al método TPIC16.ShowCode(), para configurar la apariencia.
+Se modifica GetHardwareInfo(), para que actualice también el campo "Model" del PIC.
 
 0.5
 ===

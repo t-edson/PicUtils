@@ -175,7 +175,7 @@ type
     procedure GenHexEOF;
     procedure GenHexExAdd(Data: word);
     function HexChecksum(const lin: string): string;
-    procedure ShowCode(lOut: TStrings; pag: TFlashPage);
+    procedure ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr: boolean);
   private
     FCommonRAM: boolean;
     function StrHexFlash(i1, i2: integer): string;
@@ -236,7 +236,7 @@ type
     procedure addCommAsm(comm: string);  //Add a comment to the ASM code
     procedure addCommAsm1(comm: string); //Add lateral comment to the ASM code
     procedure GenHex(hexFile: string);  //genera un archivo hex
-    procedure DumpCode(l: TStrings);  //vuelva en código que contiene
+    procedure DumpCode(l: TStrings; incAdrr: boolean);  //vuelva en código que contiene
   public
     constructor Create;
     destructor Destroy; override;
@@ -1386,13 +1386,14 @@ begin
   GenHexComm('PIC16FXXXX');   //comentario
   hexLines.SaveToFile(hexFile);  //genera archivo
 end;
-procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage);
+procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr: boolean);
 {Muestra el código desensamblado de una página}
 var
   i, il: Word;
   val: Word;
   comLin: string;   //comentario de línea
   comLat: string;   //comentario lateral
+  lin : string;
 begin
   if pag.nUsed = 0 then exit; //no hay datos
   for i:=pag.minUsed to pag.maxUsed do begin
@@ -1413,33 +1414,38 @@ begin
     val := pag.mem[i].value;
     Decode(val);   //decodifica instrucción
 //    lOut.Add('    $'+IntToHex(i,4) + ':' +IntToHex(val,4)+ ' ' + Disassembler);
-    if comLin<>'' then    //escribe comentario de línea
+    if comLin<>'' then  begin   //escribe comentario al inicio de línea
       lOut.Add(comLin);
-    lOut.Add('    $'+IntToHex(i,4) + ': ' + Disassembler(true) + ' ' + comLat);
+    end;
+    //Escribe línea
+    lin := Disassembler(true) + ' ' + comLat;
+    if incAdrr then  //Incluye dirección física
+      lin := '$'+IntToHex(i,4) + ': ' + lin;
+    lOut.Add('    ' + lin);
   end;
 end;
-procedure TPIC16.DumpCode(l: TStrings);
+procedure TPIC16.DumpCode(l: TStrings; incAdrr: boolean);
 {Desensambla las instrucciones grabadas en el PIC.
  Se debe llamar despues de llamar a GenHex(), para que se actualicen las variables}
 begin
   case NumPages of
   1: begin
-      ShowCode(l, page0);
+      ShowCode(l, page0, incAdrr);
   end;
   2:begin
-      ShowCode(l, page0);
-      ShowCode(l, page1);
+      ShowCode(l, page0, incAdrr);
+      ShowCode(l, page1, incAdrr);
   end;
   3:begin
-      ShowCode(l, page0);
-      ShowCode(l, page1);
-      ShowCode(l, page2);
+      ShowCode(l, page0, incAdrr);
+      ShowCode(l, page1, incAdrr);
+      ShowCode(l, page2, incAdrr);
   end;
   4:begin
-      ShowCode(l, page0);
-      ShowCode(l, page1);
-      ShowCode(l, page2);
-      ShowCode(l, page3);
+      ShowCode(l, page0, incAdrr);
+      ShowCode(l, page1, incAdrr);
+      ShowCode(l, page2, incAdrr);
+      ShowCode(l, page3, incAdrr);
   end;
   end;
 end;

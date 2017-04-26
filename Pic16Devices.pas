@@ -84,6 +84,7 @@ begin
    pic.MaxFlash := 0;  //inicia valor
    pic.MaxFreq := 0;
    pic.DisableAllRAM;
+   pic.Model := model;
    case Upcase(model) of
    'PIC12F629',
    'PIC12F675': begin
