@@ -1,3 +1,8 @@
+0.7
+===
+Se agrega protección a la codificación de las rutinas CALL y GOTO.
+Se elimina la función TPIC16.FreeMemRAM(), porque no se estaba usando.
+
 0.6
 ===
 Se amplían las rutinas para que consideren el caso de un solo banco de RAM.

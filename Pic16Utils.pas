@@ -89,7 +89,7 @@ type //Modelo de la memoria RAM
     name   : string;   //name of the record
     bitname: array[0..7] of string;  //name of the bits.
     state  : TPIC16CellState;  //status of the cell
-    {Podemos usar un tamaño mediano para este registro, porque no esperamos tener muhcas
+    {Podemos usar un tamaño mediano para este registro, porque no esperamos tener muchas
     celdas de RAM (<1K).}
   end;
   TPIC16RamCellPtr = ^TPIC16RamCell;
@@ -195,7 +195,6 @@ type
   public
     Model    : string;    //modelo de PIC
     Npins    : byte;      //número de pines
-    iFlash   : integer;   //puntero a la memoria Flash, para escribir
     frequen  : integer;   //frecuencia del reloj
     MaxFreq  : integer;   //máxima frecuencia del reloj
     //Propiedades que definen la arquitectura del PIC destino.
@@ -205,12 +204,12 @@ type
                          implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
     bank0, bank1, bank2, bank3: TRAMBank;  //bancos de memoria RAM
     page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
+    iFlash: integer;   //puntero a la memoria Flash, para escribir
     property GPRStart: integer read FGPRStart write SetGPRStart;   //dirección de inicio de los registros de usuario
     //funciones para la memoria RAM
     function GetFreeBit(var offs, bnk, bit: byte): boolean;
     function GetFreeByte(var offs, bnk: byte): boolean;
     function GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;  //obtiene una dirección libre
-    function FreeMemRAM(const size: integer; var addr: word): boolean;  //libera una dirección usada
     function TotalMemRAM: word; //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
     procedure ExploreUsed(rutExplorRAM: TRutExplorRAM);    //devuelve un reporte del uso de la RAM
@@ -231,6 +230,7 @@ type
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
     procedure ClearMemFlash;
     //Métodos para codificar instrucciones de acuerdo a la sintaxis
+    procedure useFlash;
     procedure codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
     procedure codAsmF(const inst: TPIC16Inst; const f: byte);
     procedure codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
@@ -531,6 +531,12 @@ begin
 end;
 
 { TPIC16 }
+procedure TPIC16.useFlash;
+{Marca la posición actual, como usada, e incrementa el puntero  iFlash.}
+begin
+  flash[iFlash].used := true;  //marca como usado
+  inc(iFlash);
+end;
 procedure TPIC16.codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f,d}
 begin
@@ -552,8 +558,7 @@ begin
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flash[iFlash].used := true;  //marca como usado
-  inc(iFlash);
+  useFlash;  //marca como usado e incrementa puntero.
 end;
 procedure TPIC16.codAsmF(const inst: TPIC16Inst; const f: byte);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f}
@@ -564,8 +569,7 @@ begin
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flash[iFlash].used := true;  //marca como usado
-  inc(iFlash);
+  useFlash;  //marca como usado e incrementa puntero.
 end;
 procedure TPIC16.codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
 //Codifica las instrucciones orientadas a bit.
@@ -578,8 +582,7 @@ begin
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flash[iFlash].used := true;  //marca como usado
-  inc(iFlash);
+  useFlash;  //marca como usado e incrementa puntero.
 end;
 procedure TPIC16.codAsmK(const inst: TPIC16Inst; const k: byte);
 {Codifica las instrucciones con constantes.}
@@ -595,21 +598,19 @@ begin
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flash[iFlash].used := true;  //marca como usado
-  inc(iFlash);
+  useFlash;  //marca como usado e incrementa puntero.
 end;
 procedure TPIC16.codAsmA(const inst: TPIC16Inst; const a: word);
 {Codifica las instrucciones de control.
  "a" debe ser word, porque la dirección destino, requiere 11 bits.}
 begin
   case inst of
-  CALL  : flash[iFlash].value := %10000000000000 + a;
-  GOTO_ : flash[iFlash].value := %10100000000000 + a;
+  CALL  : flash[iFlash].value := %10000000000000 + (a and %11111111111);
+  GOTO_ : flash[iFlash].value := %10100000000000 + (a and %11111111111);
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flash[iFlash].used := true;  //marca como usado
-  inc(iFlash);
+  useFlash;  //marca como usado e incrementa puntero.
 end;
 procedure TPIC16.codAsm(const inst: TPIC16Inst);
 //Codifica las instrucciones de control.
@@ -624,19 +625,13 @@ begin
   else
     raise Exception.Create('Error de implementación.');
   end;
-  flash[iFlash].used := true;  //marca como usado
-  inc(iFlash);
+  useFlash;  //marca como usado e incrementa puntero.
 end;
 procedure TPIC16.codGotoAt(iflash0: integer; const k: word);
 {Codifica una instrucción GOTO, en una posición específica y sin alterar el puntero "iFlash"
 actual. Se usa para completar saltos indefinidos}
-var
-  tmp: Integer;
 begin
-  tmp := iFlash;   //guarda flash
-  iFlash := iFlash0;   //ubica dirección
-  flash[iFlash].value := %10100000000000 + k;
-  iFlash := tmp;   //retorna dirección flash
+  flash[iFlash0].value := %10100000000000 + k;
 end;
 function TPIC16.FindOpcode(Op: string; var syntax: string): TPIC16Inst;
 {Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
@@ -1031,7 +1026,6 @@ begin
   bank2.GPRStart:=AValue;
   bank3.GPRStart:=AValue;
 end;
-
 //funciones para la memoria RAM
 function TPIC16.GetFreeBit(var offs, bnk, bit: byte): boolean;
 {Devuelve una dirección libre de la memoria flash (y el banco). Si encuentra espacio,
@@ -1184,10 +1178,6 @@ begin
   Result := false;   //valor inicial
   {si llegó aquí es porque no encontró la memoria solicitada,
   al menos de ese tamaño, o no hay bancos.}
-end;
-function TPIC16.FreeMemRAM(const size: integer; var addr: word): boolean;
-begin
-
 end;
 function TPIC16.TotalMemRAM: word;
 {Devuelve el total de memoria RAM disponible}

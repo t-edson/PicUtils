@@ -1,4 +1,4 @@
-# PicUtils 0.6
+# PicUtils 0.7
 ==============
 
 Librería en Lazarus, con utilidades para la programación de microcontroladores PIC.
@@ -20,7 +20,7 @@ El objetivo de esta unidad es poder servir como base para la implementación de 
 
 ## Modo de trabajo
 
-Se puede trabajar de diversas formas con la libreria, dependiendo de la función que se desee implementar. Pero en general, casi siempre se reequerirá primero crear un objeto de la clase TPIC16:
+Se puede trabajar de diversas formas con la libreria, dependiendo de la función que se desee implementar. Pero en general, casi siempre se requerirá primero crear un objeto de la clase TPIC16:
 
 ```
 uses  ... , pic16utils;
