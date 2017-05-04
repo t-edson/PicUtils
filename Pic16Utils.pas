@@ -130,9 +130,13 @@ type //Modelo de la memoria RAM
 
 type  //Models for Flash memory
   TPIC16FlashCell = record
-    value  : word;     //value of the memory
-    used   : boolean;  //indicate if have been written
-    topComment: string;  //comment or label on the top of the cell.
+    value    : word;     //value of the memory
+    used     : boolean;  //indicate if have been written
+    {Estos campos de cadena ocupan bastante espacio, aún cuado están en NULL. Si se
+    quisiera optimizar el uso de RAM, se podría pensar en codificar, variso campos en
+    una sola cadena.}
+    topLabel : string;   //label on the top of the cell.
+    topComment: string;  //comment on the top of the cell.
     sideComment: string; //right comment to code
 
     {tener cuidado con el tamaño de este registro, pues se va a multiplicar por 8192}
@@ -242,6 +246,7 @@ type
     procedure codGotoAt(iflash0: integer; const k: word);
     //Métodos adicionales
     function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
+    procedure addTopLabel(lbl: string);  //Add a comment to the ASM code
     procedure addTopComm(comm: string);  //Add a comment to the ASM code
     procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
     procedure GenHex(hexFile: string);  //genera un archivo hex
@@ -664,6 +669,10 @@ begin
   end else  begin
     Result := _Inval;
   end;
+end;
+procedure TPIC16.addTopLabel(lbl: string);
+begin
+  flash[iFlash].topLabel := lbl;
 end;
 procedure TPIC16.addTopComm(comm: string);
 {Agrega un comentario de línea al código en la posición de memoria actual}
@@ -1385,6 +1394,7 @@ begin
   for i:=0 to high(flash) do begin
     flash[i].value := $3FFF;
     flash[i].used := false;
+    flash[i].topLabel   := '';
     flash[i].sideComment:= '';
     flash[i].topComment := '';
   end;
@@ -1425,16 +1435,19 @@ var
   val: Word;
   comLin: string;   //comentario de línea
   comLat: string;   //comentario lateral
-  lin : string;
+  lin , lblLin: string;
 begin
   if pag.nUsed = 0 then exit; //no hay datos
   for i:=pag.minUsed to pag.maxUsed do begin
-    //Lee comentarios
+    //Lee comentarios y etiqueta
+    lblLin := pag.mem[i].topLabel;
     comLat := pag.mem[i].sideComment;
     comLin := pag.mem[i].topComment;
-    //DEcodifica instrucción
+    //Decodifica instrucción
     val := pag.mem[i].value;
     Decode(val);   //decodifica instrucción
+    //Escribe etiqueta al inicio de línea
+    if lblLin<>'' then lOut.Add(lblLin+':');
     //Escribe comentario al inicio de línea
     if incCom and (comLin<>'') then  begin
       lOut.Add(comLin);
