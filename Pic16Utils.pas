@@ -132,7 +132,8 @@ type  //Models for Flash memory
   TPIC16FlashCell = record
     value  : word;     //value of the memory
     used   : boolean;  //indicate if have been written
-    comment: string;   //comment to code
+    topComment: string;  //comment or label on the top of the cell.
+    sideComment: string; //right comment to code
 
     {tener cuidado con el tamaño de este registro, pues se va a multiplicar por 8192}
   end;
@@ -241,8 +242,8 @@ type
     procedure codGotoAt(iflash0: integer; const k: word);
     //Métodos adicionales
     function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
-    procedure addCommAsm(comm: string);  //Add a comment to the ASM code
-    procedure addCommAsm1(comm: string); //Add lateral comment to the ASM code
+    procedure addTopComm(comm: string);  //Add a comment to the ASM code
+    procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
     procedure GenHex(hexFile: string);  //genera un archivo hex
     procedure DumpCode(l: TStrings; incAdrr, incCom: boolean);  //vuelva en código que contiene
   public
@@ -664,16 +665,24 @@ begin
     Result := _Inval;
   end;
 end;
-procedure TPIC16.addCommAsm(comm: string);
+procedure TPIC16.addTopComm(comm: string);
 {Agrega un comentario de línea al código en la posición de memoria actual}
 begin
-  flash[iFlash].comment:=comm;
+  flash[iFlash].topComment := comm;
 end;
-procedure TPIC16.addCommAsm1(comm: string);
-{Agrega un comentario al código en la posición de memoria anterior}
+procedure TPIC16.addSideComm(comm: string; before: boolean);
+{Agrega un comentario para que apareza al lado de la instrucción.
+ "before" = TRUE -> Se debe llamar después de codificar la instrucción
+ "before" = FALSE -> Se debe llamar antes de codificar la instrucción
+ }
 begin
-  if iFlash= 0 then exit;
-  flash[iFlash-1].comment+=comm;   //se agrega al que pudiera haber
+  if before then begin
+    if iFlash= 0 then exit;
+    flash[iFlash-1].sideComment+=comm;   //se agrega al que pudiera haber
+  end else begin
+    if iFlash= 0 then exit;
+    flash[iFlash].sideComment+=comm;   //se agrega al que pudiera haber
+  end;
 end;
 
 function TPIC16.HexChecksum(const lin:string): string;
@@ -1376,7 +1385,8 @@ begin
   for i:=0 to high(flash) do begin
     flash[i].value := $3FFF;
     flash[i].used := false;
-    flash[i].comment:='';
+    flash[i].sideComment:= '';
+    flash[i].topComment := '';
   end;
 end;
 procedure TPIC16.GenHex(hexFile: string);
@@ -1411,7 +1421,7 @@ end;
 procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom: boolean);
 {Muestra el código desensamblado de una página}
 var
-  i, il: Word;
+  i: Word;
   val: Word;
   comLin: string;   //comentario de línea
   comLat: string;   //comentario lateral
@@ -1419,20 +1429,10 @@ var
 begin
   if pag.nUsed = 0 then exit; //no hay datos
   for i:=pag.minUsed to pag.maxUsed do begin
-    if pag.mem[i].comment<>'' then begin  //pone comentario si exste
-      comLin := pag.mem[i].comment;
-      il := pos('|',comLin);
-      if il<>0 then begin
-        //hay comentario lateral
-        comLat := copy(comLin, il +1, 100);
-        comLin := copy(comLin, 1, il-1);
-      end else begin
-        comLat := '';
-      end;
-    end else begin
-      comLin := '';
-      comLat := '';
-    end;
+    //Lee comentarios
+    comLat := pag.mem[i].sideComment;
+    comLin := pag.mem[i].topComment;
+    //DEcodifica instrucción
     val := pag.mem[i].value;
     Decode(val);   //decodifica instrucción
     //Escribe comentario al inicio de línea

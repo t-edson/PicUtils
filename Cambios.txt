@@ -5,6 +5,11 @@ Se elimina la función TPIC16.FreeMemRAM(), porque no se estaba usando.
 Se define que TPIC16.MaxFlash, indique siempre el tamaño de la memoria Flash.
 Se elimina TPIC16.TotalMemFlash(). 
 Se incluye el campo MsjError, para devolver mensajes de error.
+Se crea el campo TPIC16FlashCell.topComment, para alojar a las etiquetas o comentarios
+del código.
+Se cambiar de ombre al campo TPIC16FlashCell.Comment por sideComment.
+Se cambia el nombre y código de los métodos que manejan comentarios, para adecuarse a
+los nuevos campos.
 
 0.6
 ===
