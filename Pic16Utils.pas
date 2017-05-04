@@ -1022,8 +1022,6 @@ begin
      end;
   ADDLW,
   ANDLW,
-  CALL,
-  GOTO_,
   IORLW,
   MOVLW,
   RETLW,
@@ -1031,6 +1029,10 @@ begin
   XORLW: begin
        Result := nemo + '0x'+IntToHex(k_,2);
      end;
+  CALL,
+  GOTO_: begin   //Faltaría decodificar la dirección
+    Result := nemo + '0x'+IntToHex(k_,2);
+  end;
   CLRW,
   NOP,
   CLRWDT,
