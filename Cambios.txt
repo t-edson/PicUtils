@@ -2,6 +2,9 @@
 ===
 Se agrega protección a la codificación de las rutinas CALL y GOTO.
 Se elimina la función TPIC16.FreeMemRAM(), porque no se estaba usando.
+Se define que TPIC16.MaxFlash, indique siempre el tamaño de la memoria Flash.
+Se elimina TPIC16.TotalMemFlash(). 
+Se incluye el campo MsjError, para devolver mensajes de error.
 
 0.6
 ===

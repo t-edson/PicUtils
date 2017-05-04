@@ -133,6 +133,7 @@ type  //Models for Flash memory
     value  : word;     //value of the memory
     used   : boolean;  //indicate if have been written
     comment: string;   //comment to code
+
     {tener cuidado con el tamaño de este registro, pues se va a multiplicar por 8192}
   end;
   TPIC16Flash = array[0..PIC_MAX_FLASH-1] of TPIC16FlashCell;
@@ -205,6 +206,7 @@ type
     bank0, bank1, bank2, bank3: TRAMBank;  //bancos de memoria RAM
     page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
     iFlash: integer;   //puntero a la memoria Flash, para escribir
+    MsjError: string;
     property GPRStart: integer read FGPRStart write SetGPRStart;   //dirección de inicio de los registros de usuario
     //funciones para la memoria RAM
     function GetFreeBit(var offs, bnk, bit: byte): boolean;
@@ -226,7 +228,6 @@ type
     procedure AddNameRAM(const addr: word; const bnk: byte; const nam: string);  //Agrega nombre a una celda de RAM
     procedure SetNameRAMbit(const addr: word; const bnk, bit: byte; const nam: string);  //Fija nombre a un bitde RAM
     //funciones para la memoria Flash
-    function TotalMemFlash: word;  //devuelve el total de memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
     procedure ClearMemFlash;
     //Métodos para codificar instrucciones de acuerdo a la sintaxis
@@ -532,8 +533,14 @@ end;
 
 { TPIC16 }
 procedure TPIC16.useFlash;
-{Marca la posición actual, como usada, e incrementa el puntero  iFlash.}
+{Marca la posición actual, como usada, e incrementa el puntero iFlash. S ihay error,
+actualiza el campo "MsjError"}
 begin
+  //Protección de desborde
+  if iFlash > MaxFlash then begin
+    MsjError := 'FLASH Memory limit exceeded.';
+    exit;
+  end;
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
@@ -1353,19 +1360,6 @@ begin
 end;
 
 //funciones para la memoria Flash
-function TPIC16.TotalMemFlash: word;
-begin
-  if NumPages=1 then begin
-    //puede que no tenga toda la página disponible
-    if MaxFlash<>0 then begin
-      Result := MaxFlash;
-    end else begin
-      Result := PIC_PAGE_SIZE;
-    end;
-  end else begin
-    Result := NumPages * PIC_PAGE_SIZE;
-  end;
-end;
 function TPIC16.UsedMemFlash: word;
 begin
   case NumPages of
@@ -1489,6 +1483,7 @@ begin
   frequen := 4000000;    //4MHz
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
+  MaxFlash := PIC_PAGE_SIZE;  //En algunos casos, puede ser menor al tamaño de una página
   GPRStart:=$20;   //dirección de inicio de los registros de usuario
   bank0.Init(0, $000, nil   , @ram);
   bank1.Init(1, $080, @bank0, @ram);
