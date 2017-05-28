@@ -190,6 +190,7 @@ type
     function StrHexFlash(i1, i2: integer): string;
   private //campos para procesar instrucciones
     FGPRStart: integer;
+    FMaxFlash: integer;
     idIns: TPIC16Inst;    //ID de Instrucción.
     d_   : TPIC16destin;  //Destino de operación. Válido solo en algunas instrucciones.
     f_   : byte;          //Registro destino. Válido solo en algunas instrucciones.
@@ -198,6 +199,7 @@ type
     procedure Decode(const opCode: word);  //decodifica instrucción
     function Disassembler(useVarName: boolean=false): string;  //Desensambla la instrucción actual
     procedure SetGPRStart(AValue: integer);
+    procedure SetMaxFlash(AValue: integer);
   public
     Model    : string;    //modelo de PIC
     Npins    : byte;      //número de pines
@@ -206,12 +208,12 @@ type
     //Propiedades que definen la arquitectura del PIC destino.
     NumBanks: byte;      //Número de bancos de RAM.
     NumPages: byte;      //Número de páginas de memoria Flash.
-    MaxFlash: integer;   {Máximo número de celdas de flash implementadas (solo en los casos de
-                         implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
     bank0, bank1, bank2, bank3: TRAMBank;  //bancos de memoria RAM
     page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
     iFlash: integer;   //puntero a la memoria Flash, para escribir
     MsjError: string;
+    property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
+                         implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
     property GPRStart: integer read FGPRStart write SetGPRStart;   //dirección de inicio de los registros de usuario
     //funciones para la memoria RAM
     function GetFreeBit(var offs, bnk, bit: byte): boolean;
@@ -1031,7 +1033,7 @@ begin
      end;
   CALL,
   GOTO_: begin   //Faltaría decodificar la dirección
-    Result := nemo + '0x'+IntToHex(k_,2);
+    Result := nemo + '0x'+IntToHex(k_,3);
   end;
   CLRW,
   NOP,
@@ -1053,6 +1055,13 @@ begin
   bank2.GPRStart:=AValue;
   bank3.GPRStart:=AValue;
 end;
+
+procedure TPIC16.SetMaxFlash(AValue: integer);
+begin
+  if FMaxFlash = AValue then Exit;
+  FMaxFlash := AValue;
+end;
+
 //funciones para la memoria RAM
 function TPIC16.GetFreeBit(var offs, bnk, bit: byte): boolean;
 {Devuelve una dirección libre de la memoria flash (y el banco). Si encuentra espacio,
@@ -1427,7 +1436,7 @@ begin
   end;
   end;
   GenHexEOF;  //fin de archivo
-  GenHexComm('PIC16FXXXX');   //comentario
+  GenHexComm(self.Model);   //comentario
   hexLines.SaveToFile(hexFile);  //genera archivo
 end;
 procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom: boolean);
@@ -1457,7 +1466,7 @@ begin
     //Escribe línea
     lin := Disassembler(true);
     if incAdrr then  begin //Incluye dirección física
-      lin := '$'+IntToHex(i,4) + ': ' + lin;
+      lin := '$'+IntToHex(i,4) + ' ' + lin;
     end;
     if incCom then begin  //Incluye comentario lateral
       lin := lin  + ' ' + comLat;

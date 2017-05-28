@@ -129,21 +129,21 @@ begin
      pic.MaxFreq:=20000000;
      pic.Npins := 28;
      pic.NumBanks := 4;  //tiene un bloque sin usar en el banco 1 y reflejado los bancos 2 y 3
-     pic.NumPages:=1;
+     pic.NumPages:=1; pic.MaxFlash:=2048;
      SetRAM16F70_71(pic);
    end;
    'PIC16F871': begin
      pic.MaxFreq:=20000000;
      pic.Npins := 40;
      pic.NumBanks := 4;  //tiene un bloque sin usar en el banco 1 y reflejado los bancos 2 y 3
-     pic.NumPages:=1;
+     pic.NumPages:=1; pic.MaxFlash:=2048;
      SetRAM16F70_71(pic);
    end;
    'PIC16F872': begin
      pic.MaxFreq:=20000000;
      pic.Npins := 28;
      pic.NumBanks := 2;  //tiene un bloque sin usar en el banco 1 y reflejado los bancos 2 y 3
-     pic.NumPages:=1;
+     pic.NumPages:=1; pic.MaxFlash:=2048;
      SetRAM16F70_71(pic);
    end;
    'PIC16F873',
@@ -151,7 +151,7 @@ begin
      pic.MaxFreq:=20000000;
      pic.Npins := 28;
      pic.NumBanks:=4;    //los bancos 2 y 3 están reflejados
-     pic.NumPages:=2;
+     pic.NumPages:=2; pic.MaxFlash:=4096;
      pic.GPRStart:=$20;
      SetRAM16F73_74(pic);
    end;
@@ -160,7 +160,7 @@ begin
      pic.MaxFreq:=20000000;
      pic.Npins := 40;
      pic.NumBanks:=4;    //los bancos 2 y 3 están reflejados
-     pic.NumPages:=2;
+     pic.NumPages:=2; pic.MaxFlash:=4096;
      pic.GPRStart:=$20;
      SetRAM16F73_74(pic);
    end;
@@ -169,7 +169,7 @@ begin
      pic.MaxFreq:=20000000;
      pic.Npins := 28;
      pic.NumBanks:=4;
-     pic.NumPages:=4;
+     pic.NumPages:=4; pic.MaxFlash:=8192;
      pic.GPRStart:=$20;   //es solo el valor de los bancoa 0 y 1
      SetRAM16F76_77(pic);
    end;
@@ -179,7 +179,7 @@ begin
      pic.MaxFreq:=20000000;
      pic.Npins := 40;
      pic.NumBanks:=4;
-     pic.NumPages:=4;
+     pic.NumPages:=4; pic.MaxFlash:=8192;
      pic.GPRStart:=$20;   //es solo el valor de los bancoa 0 y 1
      SetRAM16F76_77(pic);
    end;
@@ -195,7 +195,7 @@ begin
      pic.MaxFreq:=20000000;
      pic.Npins := 16;
      pic.NumBanks:=4;
-     pic.NumPages:=1;
+     pic.NumPages:=1; pic.MaxFlash:=2048;
      pic.GPRStart:=$20;   //es solo el valor de los bancoa 0 y 1
      SetRAM16F627_628(pic);
    end;
@@ -203,7 +203,7 @@ begin
      pic.MaxFreq:=20000000;
      pic.Npins := 16;
      pic.NumBanks:=4;
-     pic.NumPages:=2;
+     pic.NumPages:=2; pic.MaxFlash:=4096;
      pic.GPRStart:=$20;   //es solo el valor de los bancoa 0 y 1
      pic.SetStateRAM($020, $07F, cs_impleGPR);
      pic.SetStateRAM($0A0, $0EF, cs_impleGPR);
