@@ -1,3 +1,9 @@
+0.8
+===
+Se crea el método TPIC16.codCallAt()
+Se agrega protección de dirección a TPIC16.codGotoAt().
+Se traducen algunos mensajes al inglés.
+
 0.7
 ===
 Se agrega protección a la codificación de las rutinas CALL y GOTO.

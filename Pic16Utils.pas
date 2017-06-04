@@ -246,6 +246,7 @@ type
     procedure codAsmA(const inst: TPIC16Inst; const a: word);
     procedure codAsm(const inst: TPIC16Inst);
     procedure codGotoAt(iflash0: integer; const k: word);
+    procedure codCallAt(iflash0: integer; const k: word);
     //Métodos adicionales
     function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
     procedure addTopLabel(lbl: string);  //Add a comment to the ASM code
@@ -571,7 +572,7 @@ begin
   SWAPF : flash[iFlash].value := %00111000000000 + ord(d) + f;
   XORWF : flash[iFlash].value := %00011000000000 + ord(d) + f;
   else
-    raise Exception.Create('Error de implementación.');
+    raise Exception.Create('Implementation Error.');
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
@@ -582,7 +583,7 @@ begin
   CLRF  : flash[iFlash].value := %00000110000000 + f;
   MOVWF : flash[iFlash].value := %00000010000000 + f;
   else
-    raise Exception.Create('Error de implementación.');
+    raise Exception.Create('Implementation Error.');
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
@@ -595,7 +596,7 @@ begin
   BTFSC: flash[iFlash].value := %01100000000000 + (b<<7) + f;
   BTFSS: flash[iFlash].value := %01110000000000 + (b<<7) + f;
   else
-    raise Exception.Create('Error de implementación.');
+    raise Exception.Create('Implementation Error.');
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
@@ -611,7 +612,7 @@ begin
   SUBLW : flash[iFlash].value := %11110000000000 + k;
   XORLW : flash[iFlash].value := %11101000000000 + k;
   else
-    raise Exception.Create('Error de implementación.');
+    raise Exception.Create('Implementation Error.');
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
@@ -623,7 +624,7 @@ begin
   CALL  : flash[iFlash].value := %10000000000000 + (a and %11111111111);
   GOTO_ : flash[iFlash].value := %10100000000000 + (a and %11111111111);
   else
-    raise Exception.Create('Error de implementación.');
+    raise Exception.Create('Implementation Error.');
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
@@ -638,7 +639,7 @@ begin
   RETURN: flash[iFlash].value := %00000000001000;
   SLEEP : flash[iFlash].value := %00000001100011;
   else
-    raise Exception.Create('Error de implementación.');
+    raise Exception.Create('Implementation Error.');
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
@@ -646,8 +647,15 @@ procedure TPIC16.codGotoAt(iflash0: integer; const k: word);
 {Codifica una instrucción GOTO, en una posición específica y sin alterar el puntero "iFlash"
 actual. Se usa para completar saltos indefinidos}
 begin
-  flash[iFlash0].value := %10100000000000 + k;
+  flash[iFlash0].value := %10100000000000 + (k and %11111111111);
 end;
+procedure TPIC16.codCallAt(iflash0: integer; const k: word);
+{Codifica una instrucción CALL, en una posición específica y sin alterar el puntero "iFlash"
+actual. Se usa para completar llamadas indefinidas}
+begin
+  flash[iFlash0].value := %10000000000000 + (k and %11111111111);
+end;
+
 function TPIC16.FindOpcode(Op: string; var syntax: string): TPIC16Inst;
 {Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
  el identificador de instrucción y una cadena que representa a la sintaxis en "syntax".

@@ -1,4 +1,4 @@
-# PicUtils 0.7
+# PicUtils 0.8
 ==============
 
 Librería en Lazarus, con utilidades para la programación de microcontroladores PIC.
