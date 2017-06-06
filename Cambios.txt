@@ -3,6 +3,7 @@
 Se crea el método TPIC16.codCallAt()
 Se agrega protección de dirección a TPIC16.codGotoAt().
 Se traducen algunos mensajes al inglés.
+Se modifica TPIC16.addTopComm(), para que acepte un parámetro más.
 
 0.7
 ===

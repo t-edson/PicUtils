@@ -250,7 +250,7 @@ type
     //Métodos adicionales
     function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
     procedure addTopLabel(lbl: string);  //Add a comment to the ASM code
-    procedure addTopComm(comm: string);  //Add a comment to the ASM code
+    procedure addTopComm(comm: string; replace: boolean = true);  //Add a comment to the ASM code
     procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
     procedure GenHex(hexFile: string);  //genera un archivo hex
     procedure DumpCode(l: TStrings; incAdrr, incCom: boolean);  //vuelva en código que contiene
@@ -684,10 +684,14 @@ procedure TPIC16.addTopLabel(lbl: string);
 begin
   flash[iFlash].topLabel := lbl;
 end;
-procedure TPIC16.addTopComm(comm: string);
+procedure TPIC16.addTopComm(comm: string; replace: boolean);
 {Agrega un comentario de línea al código en la posición de memoria actual}
 begin
-  flash[iFlash].topComment := comm;
+  if replace then begin
+    flash[iFlash].topComment := comm;
+  end else begin
+    flash[iFlash].topComment := flash[iFlash].topComment + comm;
+  end;
 end;
 procedure TPIC16.addSideComm(comm: string; before: boolean);
 {Agrega un comentario para que apareza al lado de la instrucción.
@@ -1322,7 +1326,7 @@ direciones absolutas, muy útil para iniciar el estado físico de la memoria}
 var
   i: Integer;
   nbnk: byte;
-  bnk: TRAMBank;
+  {%H-}bnk: TRAMBank;
 begin
   for i:=i1 to i2 do begin  //verifica 1 a 1, por seguridad
     ram[i].state := status0;
