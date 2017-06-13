@@ -184,7 +184,8 @@ type
     procedure GenHexEOF;
     procedure GenHexExAdd(Data: word);
     function HexChecksum(const lin: string): string;
-    procedure ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom: boolean);
+    procedure ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom,
+      incVarNam: boolean);
   private
 //    FCommonRAM: boolean;
     function StrHexFlash(i1, i2: integer): string;
@@ -253,7 +254,7 @@ type
     procedure addTopComm(comm: string; replace: boolean = true);  //Add a comment to the ASM code
     procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
     procedure GenHex(hexFile: string);  //genera un archivo hex
-    procedure DumpCode(l: TStrings; incAdrr, incCom: boolean);  //vuelva en código que contiene
+    procedure DumpCode(l: TStrings; incAdrr, incCom, incVarNam: boolean);  //vuelva en código que contiene
   public
     constructor Create;
     destructor Destroy; override;
@@ -1451,7 +1452,7 @@ begin
   GenHexComm(self.Model);   //comentario
   hexLines.SaveToFile(hexFile);  //genera archivo
 end;
-procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom: boolean);
+procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom, incVarNam: boolean);
 {Muestra el código desensamblado de una página}
 var
   i: Word;
@@ -1476,7 +1477,7 @@ begin
       lOut.Add(comLin);
     end;
     //Escribe línea
-    lin := Disassembler(true);
+    lin := Disassembler(incVarNam);
     if incAdrr then  begin //Incluye dirección física
       lin := '$'+IntToHex(i,4) + ' ' + lin;
     end;
@@ -1486,28 +1487,28 @@ begin
     lOut.Add('    ' + lin);
   end;
 end;
-procedure TPIC16.DumpCode(l: TStrings; incAdrr, incCom: boolean);
+procedure TPIC16.DumpCode(l: TStrings; incAdrr, incCom, incVarNam: boolean);
 {Desensambla las instrucciones grabadas en el PIC.
  Se debe llamar despues de llamar a GenHex(), para que se actualicen las variables}
 begin
   case NumPages of
   1: begin
-      ShowCode(l, page0, incAdrr, incCom);
+      ShowCode(l, page0, incAdrr, incCom, incVarNam);
   end;
   2:begin
-      ShowCode(l, page0, incAdrr, incCom);
-      ShowCode(l, page1, incAdrr, incCom);
+      ShowCode(l, page0, incAdrr, incCom, incVarNam);
+      ShowCode(l, page1, incAdrr, incCom, incVarNam);
   end;
   3:begin
-      ShowCode(l, page0, incAdrr, incCom);
-      ShowCode(l, page1, incAdrr, incCom);
-      ShowCode(l, page2, incAdrr, incCom);
+      ShowCode(l, page0, incAdrr, incCom, incVarNam);
+      ShowCode(l, page1, incAdrr, incCom, incVarNam);
+      ShowCode(l, page2, incAdrr, incCom, incVarNam);
   end;
   4:begin
-      ShowCode(l, page0, incAdrr, incCom);
-      ShowCode(l, page1, incAdrr, incCom);
-      ShowCode(l, page2, incAdrr, incCom);
-      ShowCode(l, page3, incAdrr, incCom);
+      ShowCode(l, page0, incAdrr, incCom, incVarNam);
+      ShowCode(l, page1, incAdrr, incCom, incVarNam);
+      ShowCode(l, page2, incAdrr, incCom, incVarNam);
+      ShowCode(l, page3, incAdrr, incCom, incVarNam);
   end;
   end;
 end;
