@@ -6,6 +6,8 @@ Se traducen algunos mensajes al inglés.
 Se modifica TPIC16.addTopComm(), para que acepte un parámetro más.
 Se incluye el parámetro "incVarNam", en TPIC16.DumpCode(), para activar/desactivar
 el uso de nombres de las variables.
+Se agregan máscaras de protección para los parámetros de TPIC16.codAsmFD(),
+TPIC16.codAsmF() y TPIC16.codAsmFB().
 
 0.7
 ===

@@ -558,20 +558,20 @@ procedure TPIC16.codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f,d}
 begin
   case inst of
-  ADDWF : flash[iFlash].value := %00011100000000 + ord(d) + f;
-  ANDWF : flash[iFlash].value := %00010100000000 + ord(d) + f;
-  COMF  : flash[iFlash].value := %00100100000000 + ord(d) + f;
-  DECF  : flash[iFlash].value := %00001100000000 + ord(d) + f;
-  DECFSZ: flash[iFlash].value := %00101100000000 + ord(d) + f;
-  INCF  : flash[iFlash].value := %00101000000000 + ord(d) + f;
-  INCFSZ: flash[iFlash].value := %00111100000000 + ord(d) + f;
-  IORWF : flash[iFlash].value := %00010000000000 + ord(d) + f;
-  MOVF  : flash[iFlash].value := %00100000000000 + ord(d) + f;
-  RLF   : flash[iFlash].value := %00110100000000 + ord(d) + f;
-  RRF   : flash[iFlash].value := %00110000000000 + ord(d) + f;
-  SUBWF : flash[iFlash].value := %00001000000000 + ord(d) + f;
-  SWAPF : flash[iFlash].value := %00111000000000 + ord(d) + f;
-  XORWF : flash[iFlash].value := %00011000000000 + ord(d) + f;
+  ADDWF : flash[iFlash].value := %00011100000000 + ord(d) + (f and %1111111);
+  ANDWF : flash[iFlash].value := %00010100000000 + ord(d) + (f and %1111111);
+  COMF  : flash[iFlash].value := %00100100000000 + ord(d) + (f and %1111111);
+  DECF  : flash[iFlash].value := %00001100000000 + ord(d) + (f and %1111111);
+  DECFSZ: flash[iFlash].value := %00101100000000 + ord(d) + (f and %1111111);
+  INCF  : flash[iFlash].value := %00101000000000 + ord(d) + (f and %1111111);
+  INCFSZ: flash[iFlash].value := %00111100000000 + ord(d) + (f and %1111111);
+  IORWF : flash[iFlash].value := %00010000000000 + ord(d) + (f and %1111111);
+  MOVF  : flash[iFlash].value := %00100000000000 + ord(d) + (f and %1111111);
+  RLF   : flash[iFlash].value := %00110100000000 + ord(d) + (f and %1111111);
+  RRF   : flash[iFlash].value := %00110000000000 + ord(d) + (f and %1111111);
+  SUBWF : flash[iFlash].value := %00001000000000 + ord(d) + (f and %1111111);
+  SWAPF : flash[iFlash].value := %00111000000000 + ord(d) + (f and %1111111);
+  XORWF : flash[iFlash].value := %00011000000000 + ord(d) + (f and %1111111);
   else
     raise Exception.Create('Implementation Error.');
   end;
@@ -581,8 +581,8 @@ procedure TPIC16.codAsmF(const inst: TPIC16Inst; const f: byte);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f}
 begin
   case inst of
-  CLRF  : flash[iFlash].value := %00000110000000 + f;
-  MOVWF : flash[iFlash].value := %00000010000000 + f;
+  CLRF  : flash[iFlash].value := %00000110000000 + (f and %1111111);
+  MOVWF : flash[iFlash].value := %00000010000000 + (f and %1111111);
   else
     raise Exception.Create('Implementation Error.');
   end;
@@ -592,10 +592,10 @@ procedure TPIC16.codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
 //Codifica las instrucciones orientadas a bit.
 begin
   case inst of
-  BCF  : flash[iFlash].value := %01000000000000 + (b<<7) + f;
-  BSF  : flash[iFlash].value := %01010000000000 + (b<<7) + f;
-  BTFSC: flash[iFlash].value := %01100000000000 + (b<<7) + f;
-  BTFSS: flash[iFlash].value := %01110000000000 + (b<<7) + f;
+  BCF  : flash[iFlash].value := %01000000000000 + (b<<7) + (f and %1111111);
+  BSF  : flash[iFlash].value := %01010000000000 + (b<<7) + (f and %1111111);
+  BTFSC: flash[iFlash].value := %01100000000000 + (b<<7) + (f and %1111111);
+  BTFSS: flash[iFlash].value := %01110000000000 + (b<<7) + (f and %1111111);
   else
     raise Exception.Create('Implementation Error.');
   end;
