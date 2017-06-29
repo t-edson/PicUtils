@@ -445,17 +445,6 @@ begin
       inc(Result);
   end;
 end;
-{procedure TRAMBank.InitStateMem(i1, i2: byte; status0: TPIC16CellState);
-{Inicia el campo State, de la memoria. Permite definir el estado real de la memoria RAM}
-var
-  i: Byte;
-begin
-  i1 := i1 and $7f;  //solo considera 7 bits
-  i2 := i2 and $7f;  //solo considera 7 bits
-  for i:=i1 to i2 do begin  //verifica 1 a 1, por seguridad
-    ram^[i+AddrStart].state := status0;
-  end;
-end;}
 
 { TFlashPage }
 function TFlashPage.Getmem(i: word): TPIC16FlashCell;
@@ -1479,7 +1468,7 @@ begin
     //Escribe línea
     lin := Disassembler(incVarNam);
     if incAdrr then  begin //Incluye dirección física
-      lin := '$'+IntToHex(i,4) + ' ' + lin;
+      lin := '0x'+IntToHex(i,3) + ' ' + lin;
     end;
     if incCom then begin  //Incluye comentario lateral
       lin := lin  + ' ' + comLat;
