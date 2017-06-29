@@ -96,6 +96,27 @@ begin
      pic.SetStateRAM($20, $5F, cs_impleGPR);
      pic.SetStateRAM($A0, $DF, cs_mapToBnk, 0);
    end;
+   'PIC16C63',
+   'PIC16CR63':begin
+     pic.MaxFreq:=20000000;
+     pic.Npins := 28;
+     pic.NumBanks:=2;    //los bancos 2 y 3 están reflejados
+     pic.NumPages:=1; pic.MaxFlash:=512;  //banco 0 implementado parcialmente
+     pic.GPRStart:=$0C;
+     pic.SetStateRAM($0C, $2F, cs_impleGPR);
+     pic.SetStateRAM($8C, $AF, cs_mapToBnk, 0);
+   end;
+   'PIC16C65',
+   'PIC16C65A',
+   'PIC16CR65': begin
+     pic.MaxFreq:=20000000;
+     pic.Npins := 40;
+     pic.NumBanks:=2;    //los bancos 2 y 3 están reflejados
+     pic.NumPages:=1; pic.MaxFlash:=512;  //banco 0 implementado parcialmente
+     pic.GPRStart:=$0C;
+     pic.SetStateRAM($0C, $2F, cs_impleGPR);
+     pic.SetStateRAM($8C, $AF, cs_mapToBnk, 0);
+   end;
    'PIC16F83',
    'PIC16CR83': begin
      pic.MaxFreq:=10000000;

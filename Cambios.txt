@@ -1,3 +1,8 @@
+0.9
+===
+Se agrega soporte para los PIC PIC16C63, PIC16CR63, PIC16C65, PIC16C65A, y PIC16CR65. 
+
+
 0.8
 ===
 Se crea el método TPIC16.codCallAt()
