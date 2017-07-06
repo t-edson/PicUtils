@@ -54,6 +54,14 @@ procedure GetSupportedDevices(list: TStrings);
 begin
    list.Add('PIC12F629');
    list.Add('PIC12F675');
+
+   list.Add('PIC16C63');
+   list.Add('PIC16CR63');
+   list.Add('PIC16C65');
+   list.Add('PIC16C65A');
+   list.Add('PIC16CR65');
+
+   list.Add('PIC16F72');
    list.Add('PIC16F83');
    list.Add('PIC16CR83');
    list.Add('PIC16F84');
@@ -100,22 +108,35 @@ begin
    'PIC16CR63':begin
      pic.MaxFreq:=20000000;
      pic.Npins := 28;
-     pic.NumBanks:=2;    //los bancos 2 y 3 están reflejados
-     pic.NumPages:=1; pic.MaxFlash:=512;  //banco 0 implementado parcialmente
-     pic.GPRStart:=$0C;
-     pic.SetStateRAM($0C, $2F, cs_impleGPR);
-     pic.SetStateRAM($8C, $AF, cs_mapToBnk, 0);
+     pic.NumBanks:=2;
+     pic.NumPages:=2; pic.MaxFlash:=4096;
+     pic.GPRStart:=$20;
+     pic.SetStateRAM($020, $07F, cs_impleGPR);
+     pic.SetStateRAM($0A0, $0FF, cs_impleGPR);
    end;
    'PIC16C65',
    'PIC16C65A',
    'PIC16CR65': begin
      pic.MaxFreq:=20000000;
      pic.Npins := 40;
-     pic.NumBanks:=2;    //los bancos 2 y 3 están reflejados
-     pic.NumPages:=1; pic.MaxFlash:=512;  //banco 0 implementado parcialmente
-     pic.GPRStart:=$0C;
-     pic.SetStateRAM($0C, $2F, cs_impleGPR);
-     pic.SetStateRAM($8C, $AF, cs_mapToBnk, 0);
+     pic.NumBanks:=2;
+     pic.NumPages:=2; pic.MaxFlash:=4096;
+     pic.GPRStart:=$20;
+     pic.SetStateRAM($020, $07F, cs_impleGPR);
+     pic.SetStateRAM($0A0, $0FF, cs_impleGPR);
+   end;
+   'PIC16F72': begin
+     pic.MaxFreq:=20000000;
+     pic.Npins := 28;
+     pic.NumBanks:=4;    //los bancos 2 y 3 están reflejados
+     pic.NumPages:=1; pic.MaxFlash:=2048;
+     pic.GPRStart:=$20;
+     pic.SetStateRAM($020, $07F, cs_impleGPR);
+     pic.SetStateRAM($0A0, $0BF, cs_impleGPR);
+     pic.SetStateRAM($0C0, $0FF, cs_mapToBnk, 0);
+     pic.SetStateRAM($120, $17F, cs_mapToBnk, 0);
+     pic.SetStateRAM($1A0, $1BF, cs_mapToBnk, 1);
+     pic.SetStateRAM($1C0, $1FF, cs_mapToBnk, 0);
    end;
    'PIC16F83',
    'PIC16CR83': begin

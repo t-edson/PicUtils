@@ -1,6 +1,7 @@
 0.9
 ===
-Se agrega soporte para los PIC PIC16C63, PIC16CR63, PIC16C65, PIC16C65A, y PIC16CR65. 
+Se agrega soporte para los PIC PIC16C63, PIC16CR63, PIC16C65, PIC16C65A, PIC16CR65 y 
+PIC16F72. 
 
 
 0.8
