@@ -253,7 +253,7 @@ type
     procedure addTopLabel(lbl: string);  //Add a comment to the ASM code
     procedure addTopComm(comm: string; replace: boolean = true);  //Add a comment to the ASM code
     procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
-    procedure GenHex(hexFile: string);  //genera un archivo hex
+    procedure GenHex(hexFile: string; ConfigWord: integer = - 1);  //genera un archivo hex
     procedure DumpCode(l: TStrings; incAdrr, incCom, incVarNam: boolean);  //vuelva en código que contiene
   public
     constructor Create;
@@ -1412,7 +1412,9 @@ begin
     flash[i].topComment := '';
   end;
 end;
-procedure TPIC16.GenHex(hexFile: string);
+procedure TPIC16.GenHex(hexFile: string; ConfigWord: integer = -1);
+var
+  cfg: String;
 begin
   hexLines.Clear;
   GenHexExAdd($0000);
@@ -1425,17 +1427,25 @@ begin
       GenHexData(page0);
       GenHexData(page1);
   end;
-  3:begin
+  3: begin
       GenHexData(page0);
       GenHexData(page1);
       GenHexData(page2);
   end;
-  4:begin
+  4: begin
       GenHexData(page0);
       GenHexData(page1);
       GenHexData(page2);
       GenHexData(page3);
   end;
+  end;
+  if ConfigWord<>-1 then begin
+    //Se pide generar bits de configuración
+    {Los bits de configuración para la serie 16F, se almacenan en:
+Config: 0x2007 (0x400E in the HEX file)
+EEPROM: 0x2100 (0x4200 in the HEX file) }
+    cfg := IntToHex(ConfigWord and $FFFF, 4);
+    GenHexData($2007, cfg);
   end;
   GenHexEOF;  //fin de archivo
   GenHexComm(self.Model);   //comentario
