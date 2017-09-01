@@ -18,7 +18,7 @@ unit Pic16Utils;
 {$mode objfpc}{$H+}
 interface
 uses
-  Classes, SysUtils, LCLProc, MisUtils;
+  Classes, SysUtils, LCLProc;
 const
   PIC_MAX_RAM = 512;
   PIC_MAX_FLASH = 8192;
@@ -1192,7 +1192,7 @@ begin
   XORLW: begin
   end;
   _Inval: begin
-    MsgErr('Invalid Opcode');
+    MsjError := 'Invalid Opcode';
   end;
   end;
   //Incrementa contador
