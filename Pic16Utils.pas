@@ -18,7 +18,7 @@ unit Pic16Utils;
 {$mode objfpc}{$H+}
 interface
 uses
-  Classes, SysUtils, LCLProc;
+  Classes, SysUtils, LCLProc, MisUtils;
 const
   PIC_MAX_RAM = 512;
   PIC_MAX_FLASH = 8192;
@@ -197,10 +197,19 @@ type
     f_   : byte;          //Registro destino. Válido solo en algunas instrucciones.
     b_   : byte;          //Bit destino. Válido solo en algunas instrucciones.
     k_   : word;          //Parámetro Literal. Válido solo en algunas instrucciones.
-    procedure Decode(const opCode: word);  //decodifica instrucción
-    function Disassembler(useVarName: boolean=false): string;  //Desensambla la instrucción actual
+    function GetBank(i : Longint): TRAMBank;
+    function GetPage(i : Longint): TFlashPage;
+    function GetSTATUS: byte;
     procedure SetGPRStart(AValue: integer);
     procedure SetMaxFlash(AValue: integer);
+  public   //Campos que modelan a los registros internos
+    W        : byte;   //Registro de trabajo
+    PCL      : byte;   //Contador de Programa L
+    PCH      : byte;   //Contador de Programa H
+    PCLATCH  : byte;   //Contador de Programa H
+    property STATUS: byte read GetSTATUS;
+    procedure Exec();  //Ejecuta instrucción actual
+    procedure Reset;
   public
     Model    : string;    //modelo de PIC
     Npins    : byte;      //número de pines
@@ -213,6 +222,10 @@ type
     page0, page1, page2, page3: TFlashPage;  //páginas de memoria Flash
     iFlash: integer;   //puntero a la memoria Flash, para escribir
     MsjError: string;
+    procedure Decode(const opCode: word);  //decodifica instrucción
+    function Disassembler(useVarName: boolean=false): string;  //Desensambla la instrucción actual
+    property banks[i : Longint]: TRAMBank Read GetBank;
+    property pages[i : Longint]: TFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
                          implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
     property GPRStart: integer read FGPRStart write SetGPRStart;   //dirección de inicio de los registros de usuario
@@ -1049,6 +1062,28 @@ begin
     Result := 'Invalid'
   end;
 end;
+function TPIC16.GetBank(i : Longint): TRAMBank;
+begin
+  case i of
+  0: Result := bank0;
+  1: Result := bank1;
+  2: Result := bank2;
+  3: Result := bank3;
+  end;
+end;
+function TPIC16.GetPage(i: Longint): TFlashPage;
+begin
+  case i of
+  0: Result := page0;
+  1: Result := page1;
+  2: Result := page2;
+  3: Result := page3;
+  end;
+end;
+function TPIC16.GetSTATUS: byte;
+begin
+  Result := ram[$03].value;
+end;
 procedure TPIC16.SetGPRStart(AValue: integer);
 begin
   FGPRStart:=AValue;
@@ -1057,11 +1092,120 @@ begin
   bank2.GPRStart:=AValue;
   bank3.GPRStart:=AValue;
 end;
-
 procedure TPIC16.SetMaxFlash(AValue: integer);
 begin
   if FMaxFlash = AValue then Exit;
   FMaxFlash := AValue;
+end;
+procedure TPIC16.Exec;
+var
+  val: Word;
+  fullAdd: word;
+  msk: byte;
+begin
+  //Decodifica instrucción
+  val := page0.mem[PCL].value;
+  Decode(val);   //decodifica instrucción
+  case idIns of
+  ADDWF: begin
+  end;
+  ANDWF: begin
+  end;
+  CLRF: begin
+  end;
+  CLRW: begin
+  end;
+  COMF : begin
+  end;
+  DECF : begin
+  end;
+  DECFSZ: begin
+  end;
+  INCF: begin
+  end;
+  INCFSZ: begin
+  end;
+  IORWF: begin
+  end;
+  MOVF: begin
+  end;
+  MOVWF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    ram[fullAdd].value := W;// b_
+  end;
+  NOP: begin
+  end;
+  RLF: begin
+  end;
+  RRF: begin
+  end;
+  SUBWF: begin
+  end;
+  SWAPF: begin
+  end;
+  XORWF: begin
+  end;
+  //BIT-ORIENTED FILE REGISTER OPERATIONS
+  BCF: begin
+      msk := $1 << b_;
+      msk := not msk;
+      fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+      ram[fullAdd].value := ram[fullAdd].value and msk;
+  end;
+  BSF: begin
+    msk := $1 << b_;
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    ram[fullAdd].value := ram[fullAdd].value or msk;// b_
+  end;
+  BTFSC: begin
+  end;
+  BTFSS: begin
+  end;
+  //LITERAL AND CONTROL OPERATIONS
+  ADDLW: begin
+  end;
+  ANDLW: begin
+  end;
+  CALL: begin
+  end;
+  CLRWDT: begin
+  end;
+  GOTO_: begin
+      PCL := k_;
+      exit;
+  end;
+  IORLW: begin
+  end;
+  MOVLW: begin
+      W := k_;
+  end;
+  RETFIE: begin
+  end;
+  RETLW: begin
+  end;
+  RETURN: begin
+  end;
+  SLEEP: begin
+  end;
+  SUBLW: begin
+  end;
+  XORLW: begin
+  end;
+  _Inval: begin
+    MsgErr('Invalid Opcode');
+  end;
+  end;
+  //Incrementa contador
+  PCL := PCL + 1;
+end;
+procedure TPIC16.Reset;
+//Reinicia el dipsoitivo
+begin
+  PCL := 0;
+  PCLATCH := 0;
+  PCH := 0;
+  W := 0;
+  ram[$03].value := %00011000;  //STATUS
 end;
 
 //funciones para la memoria RAM

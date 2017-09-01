@@ -3,7 +3,10 @@
 Se agrega soporte para los PIC PIC16C63, PIC16CR63, PIC16C65, PIC16C65A, PIC16CR65 y 
 PIC16F72.
 Se modifica TPIC16.GenHex(), para que incluya los bits de configuración.
-
+Se agregan las propiedades TPIC16.Bank[] y TPIC16.Pages[].
+Se hacen públicas las propiedades Decode() y Disassembler().
+Se crean campos para modelar a los registros internos del PIC.
+Se crea el método TPIC16.Reset().
 
 0.8
 ===

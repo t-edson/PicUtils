@@ -152,10 +152,12 @@ begin
    'PIC16CR84': begin
      pic.MaxFreq:=10000000;
      pic.Npins := 18;
-     pic.NumBanks:=2;    //los bancos 2 y 3 están reflejados
+     pic.NumBanks:=2;
      pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
      pic.GPRStart:=$0C;
+     pic.SetStateRAM($00, $0B, cs_impleSFR);
      pic.SetStateRAM($0C, $4F, cs_impleGPR);
+     pic.SetStateRAM($80, $8B, cs_impleSFR);
      pic.SetStateRAM($8C, $CF, cs_mapToBnk, 0);
    end;
    'PIC16F84A': begin
