@@ -1,3 +1,17 @@
+1.0
+===
+Se mueve el método GetFreeBit() de TRAMBank a TPIC16.
+Se convierte el campo TPIC16RamCell.used, a propiedad, y se crea el campo 
+TPIC16RamCell.mappedTo.
+Se convierte el campo TPIC16RamCell.value, a propiedad.
+Se elimina el método TRAMBank.Getmem() y la propiedad TRAMBank.mem[]
+Se elimina el estado "Mapped" de TPIC16CellState.
+Se crean los métodos TPIC16.SetStateRAMCom() y TPIC16.SetMappRAMCom(), que
+permiten definir las memorias, por comandos.
+Se hacen públicos, los campos que modelan la memoria en TPIC16.
+Se elimina el campo "TRAMBank.BankMapped", porque ya no es usado.
+
+
 0.9
 ===
 Se agrega soporte para los PIC PIC16C63, PIC16CR63, PIC16C65, PIC16C65A, PIC16CR65 y 

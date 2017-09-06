@@ -1,4 +1,4 @@
-# PicUtils 0.9
+# PicUtils 1.0
 ==============
 
 Librería en Lazarus, con utilidades para la programación de microcontroladores PIC.
@@ -9,7 +9,7 @@ Unidad con utilidades para la programación de microcontroladores PIC de rango m
 
 Se define un objeto que representa a un PIC de esta serie, que está dimensionado para poder representar al dispositivo más complejo.
 
-El objetivo de esta unidad es poder servir como base para la implementación de ensambladores, compiladores o hasta simuladores.
+El objetivo de esta unidad es poder servir como base para la implementación de ensambladores, compiladores o simuladores.
 
 ## Funcionalidades
 

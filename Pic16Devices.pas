@@ -9,43 +9,40 @@ function GetHardwareInfo(pic: TPIC16; model: string): boolean;
 
 implementation
 
-procedure SetRAM16F70_71(pic: TPIC16);
+procedure SetRAM16F870_1_2(pic: TPIC16);
 begin
-   pic.SetStateRAM($020, $07F, cs_impleGPR);
-   pic.SetStateRAM($0A0, $0BF, cs_impleGPR);
-   pic.SetStateRAM($0F0, $0FF, cs_mapToBnk, 0);
-   pic.SetStateRAM($120, $16F, cs_impleGPR);
-   pic.SetStateRAM($170, $17F, cs_mapToBnk, 0);
-   pic.SetStateRAM($1A0, $1BF, cs_impleGPR);
-   pic.SetStateRAM($1F0, $1FF, cs_mapToBnk, 0);
+   pic.SetStatRAMCom('');
+   pic.SetStatRAM($000, $01F, cs_impleSFR);
+   pic.SetStatRAM($020, $07F, cs_impleGPR);
+
+   pic.SetStatRAM($080, $09F, cs_impleSFR);
+   pic.SetStatRAM($0A0, $0BF, cs_impleGPR);
+
+   pic.SetStatRAM($100, $10F, cs_impleSFR);
+   pic.SetStatRAM($120, $16F, cs_impleGPR);
+
+   pic.SetStatRAM($180, $18F, cs_impleSFR);
+   pic.SetStatRAM($1A0, $1BF, cs_impleGPR);
+   //Direcciones mapeadas
+   pic.SetMappRAMCom('0F0-1FF:bnk0');
+   pic.SetMappRAMCom('120-17F:bnk0');
+   pic.SetMappRAMCom('1A0-1BF:bnk1, 1F0-1FF:bnk0');
 end;
-procedure SetRAM16F73_74(pic: TPIC16);
+procedure SetRAM16F873_74(pic: TPIC16);
 begin
-   pic.SetStateRAM($020, $07F, cs_impleGPR);
-   pic.SetStateRAM($0A0, $0FF, cs_impleGPR);
-   pic.SetStateRAM($120, $17F, cs_mapToBnk, 0);
-   pic.SetStateRAM($1A0, $1FF, cs_mapToBnk, 1);
+   pic.SetStatRAM($020, $07F, cs_impleGPR);
+   pic.SetStatRAM($0A0, $0FF, cs_impleGPR);
+   pic.SetMappRAMCom('120-17F:bnk0, 1A0-1FF:bnk1');
 end;
-procedure SetRAM16F76_77(pic: TPIC16);
+procedure SetRAM16F876_77(pic: TPIC16);
 begin
-   pic.SetStateRAM($020, $07F, cs_impleGPR);
-   pic.SetStateRAM($0A0, $0EF, cs_impleGPR);
-   pic.SetStateRAM($0F0, $0FF, cs_mapToBnk, 0);
-   pic.SetStateRAM($110, $16F, cs_impleGPR);
-   pic.SetStateRAM($170, $17F, cs_mapToBnk, 0);
+   pic.SetStatRAM($020, $07F, cs_impleGPR);
+   pic.SetStatRAM($0A0, $0EF, cs_impleGPR);
+   pic.SetStatRAM($110, $16F, cs_impleGPR);
    pic.bank2.GPRStart:=$10;
-   pic.SetStateRAM($190, $1EF, cs_impleGPR);
-   pic.SetStateRAM($1F0, $1FF, cs_mapToBnk, 0);
+   pic.SetStatRAM($190, $1EF, cs_impleGPR);
+   pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
    pic.bank3.GPRStart:=$10;
-end;
-procedure SetRAM16F627_628(pic: TPIC16);
-begin
-   pic.SetStateRAM($020, $07F, cs_impleGPR);
-   pic.SetStateRAM($0A0, $0EF, cs_impleGPR);
-   pic.SetStateRAM($0F0, $0FF, cs_mapToBnk, 0);
-   pic.SetStateRAM($120, $14F, cs_impleGPR);
-   pic.SetStateRAM($170, $17F, cs_mapToBnk, 0);
-   pic.SetStateRAM($1F0, $1FF, cs_mapToBnk, 0);
 end;
 
 procedure GetSupportedDevices(list: TStrings);
@@ -101,8 +98,8 @@ begin
      pic.NumBanks:=2;
      pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
      pic.GPRStart:=$20;
-     pic.SetStateRAM($20, $5F, cs_impleGPR);
-     pic.SetStateRAM($A0, $DF, cs_mapToBnk, 0);
+     pic.SetStatRAM($20, $5F, cs_impleGPR);
+     pic.SetMappRAMCom('0A0-0DF:bnk0');
    end;
    'PIC16C63',
    'PIC16CR63':begin
@@ -111,8 +108,8 @@ begin
      pic.NumBanks:=2;
      pic.NumPages:=2; pic.MaxFlash:=4096;
      pic.GPRStart:=$20;
-     pic.SetStateRAM($020, $07F, cs_impleGPR);
-     pic.SetStateRAM($0A0, $0FF, cs_impleGPR);
+     pic.SetStatRAM($020, $07F, cs_impleGPR);
+     pic.SetStatRAM($0A0, $0FF, cs_impleGPR);
    end;
    'PIC16C65',
    'PIC16C65A',
@@ -122,8 +119,8 @@ begin
      pic.NumBanks:=2;
      pic.NumPages:=2; pic.MaxFlash:=4096;
      pic.GPRStart:=$20;
-     pic.SetStateRAM($020, $07F, cs_impleGPR);
-     pic.SetStateRAM($0A0, $0FF, cs_impleGPR);
+     pic.SetStatRAM($020, $07F, cs_impleGPR);
+     pic.SetStatRAM($0A0, $0FF, cs_impleGPR);
    end;
    'PIC16F72': begin
      pic.MaxFreq:=20000000;
@@ -131,12 +128,12 @@ begin
      pic.NumBanks:=4;    //los bancos 2 y 3 están reflejados
      pic.NumPages:=1; pic.MaxFlash:=2048;
      pic.GPRStart:=$20;
-     pic.SetStateRAM($020, $07F, cs_impleGPR);
-     pic.SetStateRAM($0A0, $0BF, cs_impleGPR);
-     pic.SetStateRAM($0C0, $0FF, cs_mapToBnk, 0);
-     pic.SetStateRAM($120, $17F, cs_mapToBnk, 0);
-     pic.SetStateRAM($1A0, $1BF, cs_mapToBnk, 1);
-     pic.SetStateRAM($1C0, $1FF, cs_mapToBnk, 0);
+     pic.SetStatRAM($020, $07F, cs_impleGPR);
+     pic.SetStatRAM($0A0, $0BF, cs_impleGPR);
+
+     pic.SetMappRAMCom('0C0-0FF:bnk0');
+     pic.SetMappRAMCom('120-17F:bnk0');
+     pic.SetMappRAMCom('1A0-1BF:bnk1, 1C0-1FF:bnk0');
    end;
    'PIC16F83',
    'PIC16CR83': begin
@@ -145,8 +142,8 @@ begin
      pic.NumBanks:=2;    //los bancos 2 y 3 están reflejados
      pic.NumPages:=1; pic.MaxFlash:=512;  //banco 0 implementado parcialmente
      pic.GPRStart:=$0C;
-     pic.SetStateRAM($0C, $2F, cs_impleGPR);
-     pic.SetStateRAM($8C, $AF, cs_mapToBnk, 0);
+     pic.SetStatRAM($0C, $2F, cs_impleGPR);
+     pic.SetMappRAMCom('08C-0AF:bnk0');
    end;
    'PIC16F84',
    'PIC16CR84': begin
@@ -155,10 +152,9 @@ begin
      pic.NumBanks:=2;
      pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
      pic.GPRStart:=$0C;
-     pic.SetStateRAM($00, $0B, cs_impleSFR);
-     pic.SetStateRAM($0C, $4F, cs_impleGPR);
-     pic.SetStateRAM($80, $8B, cs_impleSFR);
-     pic.SetStateRAM($8C, $CF, cs_mapToBnk, 0);
+     pic.SetStatRAMCom('000-00B:SFR, 00C-04F:GPR');
+     pic.SetStatRAMCom('080-08B:SFR, 08C-0CF:GPR');
+     pic.SetMappRAMCom('08C-0CF:bnk0');
    end;
    'PIC16F84A': begin
      pic.MaxFreq:=20000000;
@@ -166,29 +162,33 @@ begin
      pic.NumBanks:=2;    //los bancos 2 y 3 están reflejados
      pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
      pic.GPRStart:=$0C;
-     pic.SetStateRAM($0C, $4F, cs_impleGPR);
-     pic.SetStateRAM($8C, $CF, cs_mapToBnk, 0);
+     pic.SetMappRAMCom('080-080:bnk0');
+     pic.SetMappRAMCom('082-084:bnk0');
+     pic.SetMappRAMCom('08A-08B:bnk0');
+     pic.SetStatRAMCom('000-00B:SFR, 00C-04F:GPR');
+     pic.SetStatRAMCom('080-08B:SFR, 08C-0CF:GPR');
+     pic.SetMappRAMCom('08C-0CF:bnk0');
    end;
    'PIC16F870': begin
      pic.MaxFreq:=20000000;
      pic.Npins := 28;
      pic.NumBanks := 4;  //tiene un bloque sin usar en el banco 1 y reflejado los bancos 2 y 3
      pic.NumPages:=1; pic.MaxFlash:=2048;
-     SetRAM16F70_71(pic);
+     SetRAM16F870_1_2(pic);
    end;
    'PIC16F871': begin
      pic.MaxFreq:=20000000;
      pic.Npins := 40;
      pic.NumBanks := 4;  //tiene un bloque sin usar en el banco 1 y reflejado los bancos 2 y 3
      pic.NumPages:=1; pic.MaxFlash:=2048;
-     SetRAM16F70_71(pic);
+     SetRAM16F870_1_2(pic);
    end;
    'PIC16F872': begin
      pic.MaxFreq:=20000000;
      pic.Npins := 28;
      pic.NumBanks := 2;  //tiene un bloque sin usar en el banco 1 y reflejado los bancos 2 y 3
      pic.NumPages:=1; pic.MaxFlash:=2048;
-     SetRAM16F70_71(pic);
+     SetRAM16F870_1_2(pic);
    end;
    'PIC16F873',
    'PIC16F873A': begin
@@ -197,7 +197,7 @@ begin
      pic.NumBanks:=4;    //los bancos 2 y 3 están reflejados
      pic.NumPages:=2; pic.MaxFlash:=4096;
      pic.GPRStart:=$20;
-     SetRAM16F73_74(pic);
+     SetRAM16F873_74(pic);
    end;
    'PIC16F874',
    'PIC16F874A': begin
@@ -206,7 +206,7 @@ begin
      pic.NumBanks:=4;    //los bancos 2 y 3 están reflejados
      pic.NumPages:=2; pic.MaxFlash:=4096;
      pic.GPRStart:=$20;
-     SetRAM16F73_74(pic);
+     SetRAM16F873_74(pic);
    end;
    'PIC16F876',
    'PIC16F876A': begin
@@ -215,7 +215,7 @@ begin
      pic.NumBanks:=4;
      pic.NumPages:=4; pic.MaxFlash:=8192;
      pic.GPRStart:=$20;   //es solo el valor de los bancoa 0 y 1
-     SetRAM16F76_77(pic);
+     SetRAM16F876_77(pic);
    end;
    'PIC16F877',
    'PIC16F877A',
@@ -225,7 +225,7 @@ begin
      pic.NumBanks:=4;
      pic.NumPages:=4; pic.MaxFlash:=8192;
      pic.GPRStart:=$20;   //es solo el valor de los bancoa 0 y 1
-     SetRAM16F76_77(pic);
+     SetRAM16F876_77(pic);
    end;
    'PIC16F627A': begin
      pic.MaxFreq:=20000000;
@@ -233,7 +233,11 @@ begin
      pic.NumBanks:=4;
      pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
      pic.GPRStart:=$20;
-     SetRAM16F627_628(pic);
+
+     pic.SetStatRAM($020, $07F, cs_impleGPR);
+     pic.SetStatRAM($0A0, $0EF, cs_impleGPR);
+     pic.SetStatRAM($120, $14F, cs_impleGPR);
+     pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
    end;
    'PIC16F628A': begin
      pic.MaxFreq:=20000000;
@@ -241,7 +245,11 @@ begin
      pic.NumBanks:=4;
      pic.NumPages:=1; pic.MaxFlash:=2048;
      pic.GPRStart:=$20;   //es solo el valor de los bancoa 0 y 1
-     SetRAM16F627_628(pic);
+
+     pic.SetStatRAM($020, $07F, cs_impleGPR);
+     pic.SetStatRAM($0A0, $0EF, cs_impleGPR);
+     pic.SetStatRAM($120, $14F, cs_impleGPR);
+     pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
    end;
    'PIC16F648A': begin
      pic.MaxFreq:=20000000;
@@ -249,12 +257,10 @@ begin
      pic.NumBanks:=4;
      pic.NumPages:=2; pic.MaxFlash:=4096;
      pic.GPRStart:=$20;   //es solo el valor de los bancoa 0 y 1
-     pic.SetStateRAM($020, $07F, cs_impleGPR);
-     pic.SetStateRAM($0A0, $0EF, cs_impleGPR);
-     pic.SetStateRAM($0F0, $0FF, cs_mapToBnk, 0);
-     pic.SetStateRAM($120, $16F, cs_impleGPR);
-     pic.SetStateRAM($170, $17F, cs_mapToBnk, 0);
-     pic.SetStateRAM($1F0, $1FF, cs_mapToBnk, 0);
+     pic.SetStatRAM($020, $07F, cs_impleGPR);
+     pic.SetStatRAM($0A0, $0EF, cs_impleGPR);
+     pic.SetStatRAM($120, $16F, cs_impleGPR);
+     pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
    end
    else
      exit(false);
