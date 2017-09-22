@@ -1516,6 +1516,7 @@ begin
   W := 0;
   ram[$03].Fvalue := %00011000;  //STATUS
   STKPTR := 0;   //Posición inicial del puntero de pila
+  nClck := 0;    //Inicia contador de ciclos
   //Limpia solamente el valro inicial, no toca los otros campos
   for i:=0 to high(ram) do begin
     ram[i].Fvalue := $00;
