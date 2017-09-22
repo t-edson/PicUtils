@@ -223,8 +223,11 @@ type
     property STATUS_DC: boolean read GetSTATUS_DC write SetSTATUS_DC;
     property INTCON: byte read GetINTCON;
     property INTCON_GIE: boolean read GetINTCON_GIE write SetINTCON_GIE;
-
+  public   //Control de ejecución
+    nClck : Int64;  //Contador de ciclos de reloj
+    function CurInstruction: TPIC16Inst;
     procedure Exec();  //Ejecuta instrucción actual
+    procedure ExecTo(endAdd: word);  //Ejecuta hasta cierta dirección
     procedure Reset;
   public
     //memorias
@@ -1140,10 +1143,19 @@ begin
   if FMaxFlash = AValue then Exit;
   FMaxFlash := AValue;
 end;
+function TPIC16.CurInstruction: TPIC16Inst;
+{Devuelve la instrucción, a la cue apunta PC, actualmente}
+var
+  val: Word;
+begin
+  val := flash[PCH*256+PCL].value; // page0.mem[PCL].value;
+  Decode(val);   //decodifica instrucción
+  Result := idIns;
+end;
 procedure TPIC16.Exec;
 {Ejecuta la instrución actual.
-Falta implementar las opraciones, cuando acceden al registro INDF, falta el SLEEP, el
-Watchdog timer, los ocntadores, las interrupciones}
+Falta implementar las operaciones, cuando acceden al registro INDF, falta el SLEEP, el
+Watchdog timer, los contadores, las interrupciones}
 var
   val: Word;
   fullAdd: word;
@@ -1153,7 +1165,7 @@ var
   resInt : integer;
 begin
   //Decodifica instrucción
-  val := page0.mem[PCL].value;
+  val := flash[PCH*256+PCL].value; // page0.mem[PCL].value;
   Decode(val);   //decodifica instrucción
   case idIns of
   ADDWF: begin
@@ -1476,7 +1488,22 @@ begin
   end;
   end;
   //Incrementa contador
-  PCL := PCL + 1;
+  if PCL = 255 then begin
+    PCL := 0;
+    inc(PCH);
+  end else begin
+    inc(PCL);
+  end;
+  Inc(nClck);
+end;
+procedure TPIC16.ExecTo(endAdd: word);
+{Ejecuta las instrucciones secuencialmente, desde la instrucción actual, hasta que el
+contador del programa, sea igual a la dirección "endAdd".}
+begin
+  while PCL <> endAdd do begin
+    //Ejecuta
+    Exec();
+  end;
 end;
 procedure TPIC16.Reset;
 //Reinicia el dipsoitivo
