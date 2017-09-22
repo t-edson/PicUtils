@@ -8,9 +8,16 @@ Se elimina el método TRAMBank.Getmem() y la propiedad TRAMBank.mem[]
 Se elimina el estado "Mapped" de TPIC16CellState.
 Se crean los métodos TPIC16.SetStateRAMCom() y TPIC16.SetMappRAMCom(), que
 permiten definir las memorias, por comandos.
-Se hacen públicos, los campos que modelan la memoria en TPIC16.
+Se hacen públicos, los campos que modelan la memoria en TPIC16, y se crean nuevos
+campos.
 Se elimina el campo "TRAMBank.BankMapped", porque ya no es usado.
-
+Se implementan diversas instrucciones de TPIC16.Exec(), para simular la ejecución de
+instrucciones dentro del PIC.
+Se crea el método TPIC16.ExecTo(().
+Se eliminan los campos TPIC16.GPRStart y TRAMBank.GPRStart, porque complican la 
+actualización, cuando se definen zonas de memoria.
+Se elimina TRAMBank.UsedGPR() y se modifica TPIC16.UsedMemRAM, para que lea 
+directamente de ram[].
 
 0.9
 ===

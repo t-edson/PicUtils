@@ -116,7 +116,6 @@ type //Modelo de la memoria RAM
     numBank   : integer;       //Número de banco
     ramPtr    : PIC16RamPtr;  //Puntero a memoria RAM
     AddrStart : word;          //dirección de inicio en la memoria RAM total
-    GPRStart  : byte;         //dirección de inicio de registros para el usuario
   private
     function AvailBit(const i: byte): boolean;
     function AvailByte(const i: byte): boolean;
@@ -127,11 +126,10 @@ type //Modelo de la memoria RAM
     //Funciones para administración de la memoria ramPtr
     function HaveConsecGPR(const i, n: byte): boolean; //Indica si hay "n" bytes libres
     procedure UseConsecGPR(const i, n: byte);  //Ocupa "n" bytes en la posición "i"
-    function GetFreeByte(var offs: byte): boolean;     //obtiene una dirección libre
+    function GetFreeByte(out offs: byte): boolean;     //obtiene una dirección libre
     function GetFreeBytes(const size: integer; var offs: byte): boolean;  //obtiene una dirección libre
     procedure ExploreUsed(rutExplorRAM: TRutExplorRAM);  //Explora uno a uno los bytes usados
     function TotalGPR: byte; //total de bytes que contiene para el usuario
-    function UsedGPR: byte;  //total de bytes usados por el usuario
   end;
 
 type  //Models for Flash memory
@@ -172,7 +170,7 @@ type  //Models for Flash memory
     function Used: word;  //total de bytes usados por el usuario
     //funciones para generación de archivo hex
     procedure StartHex;  //inicia la extracción de líneas
-    function ExtractHex(var Addr: word): string;  //devuelve una línea de texto del código en hexadecimal
+    function ExtractHex(out Addr: word): string;  //devuelve una línea de texto del código en hexadecimal
   end;
 
 type
@@ -193,7 +191,6 @@ type
 //    FCommonRAM: boolean;
     function StrHexFlash(i1, i2: integer): string;
   private //campos para procesar instrucciones
-    FGPRStart: integer;
     FMaxFlash: integer;
     idIns: TPIC16Inst;    //ID de Instrucción.
     d_   : TPIC16destin;  //Destino de operación. Válido solo en algunas instrucciones.
@@ -201,16 +198,32 @@ type
     b_   : byte;          //Bit destino. Válido solo en algunas instrucciones.
     k_   : word;          //Parámetro Literal. Válido solo en algunas instrucciones.
     function GetBank(i : Longint): TRAMBank;
+    function GetINTCON: byte;
+    function GetINTCON_GIE: boolean;
     function GetPage(i : Longint): TFlashPage;
     function GetSTATUS: byte;
-    procedure SetGPRStart(AValue: integer);
+    function GetSTATUS_C: boolean;
+    function GetSTATUS_DC: boolean;
+    function GetSTATUS_Z: boolean;
+    procedure SetINTCON_GIE(AValue: boolean);
+    procedure SetSTATUS_C(AValue: boolean);
+    procedure SetSTATUS_DC(AValue: boolean);
+    procedure SetSTATUS_Z(AValue: boolean);
     procedure SetMaxFlash(AValue: integer);
   public   //Campos que modelan a los registros internos
     W        : byte;   //Registro de trabajo
     PCL      : byte;   //Contador de Programa L
     PCH      : byte;   //Contador de Programa H
-    PCLATCH  : byte;   //Contador de Programa H
+    PCLATH   : byte;   //Contador de Programa H
+    STKPTR   : 0..7;   //Puntero de pila
+    STACK    : array[0..7] of word;
     property STATUS: byte read GetSTATUS;
+    property STATUS_Z: boolean read GetSTATUS_Z write SetSTATUS_Z;
+    property STATUS_C: boolean read GetSTATUS_C write SetSTATUS_C;
+    property STATUS_DC: boolean read GetSTATUS_DC write SetSTATUS_DC;
+    property INTCON: byte read GetINTCON;
+    property INTCON_GIE: boolean read GetINTCON_GIE write SetINTCON_GIE;
+
     procedure Exec();  //Ejecuta instrucción actual
     procedure Reset;
   public
@@ -234,10 +247,9 @@ type
     property pages[i : Longint]: TFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
                          implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
-    property GPRStart: integer read FGPRStart write SetGPRStart;   //dirección de inicio de los registros de usuario
     //funciones para la memoria RAM
     function GetFreeBit(var offs, bnk, bit: byte): boolean;
-    function GetFreeByte(var offs, bnk: byte): boolean;
+    function GetFreeByte(out offs, bnk: byte): boolean;
     function GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;  //obtiene una dirección libre
     function TotalMemRAM: word; //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
@@ -350,7 +362,6 @@ begin
   numBank := num;
   AddrStart :=AddrStart0;
   ramPtr       :=ram0;
-  GPRStart := $20;  //dirección de inicio de GPR por defecto
 end;
 function TRAMBank.AvailBit(const i: byte): boolean; inline;
 {Indica si hay al menos un bit disponible, en la posición de memoria indicada}
@@ -394,18 +405,18 @@ procedure TRAMBank.UseConsecGPR(const i, n: byte);
  se hará ninguan verificación.}
 var j: byte;
 begin
-  for j:=i to i+n-1 do begin
+  for j:=i to byte(i+n)-1 do begin
     ramPtr^[j+AddrStart].used:=255;  //todos los bits
     //    mem[j].used := true;   //no se puede
   end;
 end;
-function TRAMBank.GetFreeByte(var offs: byte): boolean;
+function TRAMBank.GetFreeByte(out offs: byte): boolean;
 {Busca un byte de memoria RAM libre, en este banco. }
 var
   i: byte;
 begin
   Result := false;  //valor por defecto
-  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+  for i:=0 to $7F do begin  //verifica 1 a 1, por seguridad
     if AvailByte(i)  then begin
       //encontró
 //      mem[i].used:=true;  //marca como usado
@@ -423,7 +434,7 @@ var
 begin
   Result := false;  //valor por defecto
   if size=0 then exit;
-  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+  for i:=0 to $7F do begin  //verifica 1 a 1, por seguridad
     if HaveConsecGPR(i, size) then begin
       //encontró del tamaño buscado
       UseConsecGPR(i, size);  //marca como usado
@@ -439,7 +450,7 @@ byte encontrado.}
 var
   i: Byte;
 begin
-  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+  for i:=0 to $7F do begin  //verifica 1 a 1, por seguridad
     if UsedByte(i) then rutExplorRAM(i, 0, @ramPtr^[i+AddrStart]);
   end;
 end;
@@ -449,18 +460,8 @@ var
   i: Byte;
 begin
   Result := 0;
-  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
+  for i:=0 to $7F do begin  //verifica 1 a 1, por seguridad
     if ramPtr^[i+AddrStart].state = cs_impleGPR then
-      inc(Result);
-  end;
-end;
-function TRAMBank.UsedGPR: byte;
-var
-  i: Integer;
-begin
-  Result := 0;
-  for i:=GPRStart to $7F do begin  //verifica 1 a 1, por seguridad
-    if UsedByte(i) then
       inc(Result);
   end;
 end;
@@ -517,7 +518,7 @@ begin
   end;
   iHex := minUsed;   //inicia índice
 end;
-function TFlashPage.ExtractHex(var Addr: word): string;
+function TFlashPage.ExtractHex(out Addr: word): string;
 {Devuelve una cadena (de longitud variable) con la lista del código binario que contiene,
 en forma de caracteres en hexadecimal, de la misma forma a como se usa en un archivo
 *.hex. En "Addr" devuelve la dirección absoluta de inicio desde donde lee.
@@ -600,10 +601,10 @@ procedure TPIC16.codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
 //Codifica las instrucciones orientadas a bit.
 begin
   case inst of
-  BCF  : flash[iFlash].value := %01000000000000 + (b<<7) + (f and %1111111);
-  BSF  : flash[iFlash].value := %01010000000000 + (b<<7) + (f and %1111111);
-  BTFSC: flash[iFlash].value := %01100000000000 + (b<<7) + (f and %1111111);
-  BTFSS: flash[iFlash].value := %01110000000000 + (b<<7) + (f and %1111111);
+  BCF  : flash[iFlash].value := %01000000000000 + word(b<<7) + (f and %1111111);
+  BSF  : flash[iFlash].value := %01010000000000 + word(b<<7) + (f and %1111111);
+  BTFSC: flash[iFlash].value := %01100000000000 + word(b<<7) + (f and %1111111);
+  BTFSS: flash[iFlash].value := %01110000000000 + word(b<<7) + (f and %1111111);
   else
     raise Exception.Create('Implementation Error.');
   end;
@@ -1075,6 +1076,8 @@ begin
   1: Result := bank1;
   2: Result := bank2;
   3: Result := bank3;
+  else
+    Result := bank0;
   end;
 end;
 function TPIC16.GetPage(i: Longint): TFlashPage;
@@ -1084,19 +1087,53 @@ begin
   1: Result := page1;
   2: Result := page2;
   3: Result := page3;
+  else
+    Result := page0;
   end;
 end;
 function TPIC16.GetSTATUS: byte;
 begin
   Result := ram[$03].Fvalue;
 end;
-procedure TPIC16.SetGPRStart(AValue: integer);
+function TPIC16.GetSTATUS_Z: boolean;
 begin
-  FGPRStart:=AValue;
-  bank0.GPRStart:=AValue;
-  bank1.GPRStart:=AValue;
-  bank2.GPRStart:=AValue;
-  bank3.GPRStart:=AValue;
+  Result := (ram[$03].Fvalue and %00000100) <> 0;
+end;
+procedure TPIC16.SetSTATUS_Z(AValue: boolean);
+begin
+  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000100
+            else ram[$03].Fvalue := ram[$03].Fvalue and %11111011;
+end;
+function TPIC16.GetSTATUS_C: boolean;
+begin
+  Result := (ram[$03].Fvalue and %00000001) <> 0;
+end;
+procedure TPIC16.SetSTATUS_C(AValue: boolean);
+begin
+  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000001
+            else ram[$03].Fvalue := ram[$03].Fvalue and %11111110;
+end;
+function TPIC16.GetSTATUS_DC: boolean;
+begin
+  Result := (ram[$03].Fvalue and %00000010) <> 0;
+end;
+procedure TPIC16.SetSTATUS_DC(AValue: boolean);
+begin
+  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000010
+            else ram[$03].Fvalue := ram[$03].Fvalue and %11111101;
+end;
+function TPIC16.GetINTCON: byte;
+begin
+  Result := ram[$0B].Fvalue;
+end;
+function TPIC16.GetINTCON_GIE: boolean;
+begin
+  Result := (ram[$0B].Fvalue and %10000000) <> 0;
+end;
+procedure TPIC16.SetINTCON_GIE(AValue: boolean);
+begin
+  if AVAlue then ram[$0B].Fvalue := ram[$0B].Fvalue or  %10000000
+            else ram[$0B].Fvalue := ram[$0B].Fvalue and %01111111;
 end;
 procedure TPIC16.SetMaxFlash(AValue: integer);
 begin
@@ -1104,59 +1141,224 @@ begin
   FMaxFlash := AValue;
 end;
 procedure TPIC16.Exec;
+{Ejecuta la instrución actual.
+Falta implementar las opraciones, cuando acceden al registro INDF, falta el SLEEP, el
+Watchdog timer, los ocntadores, las interrupciones}
 var
   val: Word;
   fullAdd: word;
-  msk: byte;
+  msk, resNib: byte;
+  resByte, bit7, bit0: byte;
+  resWord: word;
+  resInt : integer;
 begin
   //Decodifica instrucción
   val := page0.mem[PCL].value;
   Decode(val);   //decodifica instrucción
   case idIns of
   ADDWF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resWord := W + ram[fullAdd].value;
+    resNib := (W and $0F) + (ram[fullAdd].value and $0F);
+    if d_ = toF then begin
+      ram[fullAdd].value := resWord and $FF;
+    end else begin  //toW
+      w := resWord and $FF;
+    end;
+    STATUS_Z := (resWord and $ff) = 0;
+    STATUS_C := (resWord > 255);
+    STATUS_DC := (resNib > 15);
   end;
   ANDWF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resByte := W and ram[fullAdd].value;
+    if d_ = toF then begin
+      ram[fullAdd].value := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+    STATUS_Z := resByte = 0;
   end;
   CLRF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    ram[fullAdd].value := 0;
+    STATUS_Z := true;
   end;
   CLRW: begin
+    W := 0;
+    STATUS_Z := true;
   end;
   COMF : begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resByte := not ram[fullAdd].value;
+    if d_ = toF then begin
+      ram[fullAdd].value := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+    STATUS_Z := resByte = 0;
   end;
   DECF : begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    if ram[fullAdd].value = 0 then resByte := $FF
+    else resByte := ram[fullAdd].value-1;
+    if d_ = toF then begin
+      ram[fullAdd].value := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+    STATUS_Z := resByte = 0;
   end;
   DECFSZ: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    if ram[fullAdd].value = 0 then resByte := $FF
+    else resByte := ram[fullAdd].value-1;
+    if d_ = toF then begin
+      ram[fullAdd].value := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+    STATUS_Z := resByte = 0;
+    if STATUS_Z then begin
+      //salta una instrucción
+      if PCL = 255 then begin
+        PCL := 0;
+        inc(PCH);
+      end else begin
+        inc(PCL);
+      end;
+    end;
   end;
   INCF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    if ram[fullAdd].value = 255 then resByte := 0
+    else resByte := ram[fullAdd].value+1;
+    if d_ = toF then begin
+      ram[fullAdd].value := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+    STATUS_Z := resByte = 0;
   end;
   INCFSZ: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    if ram[fullAdd].value = 255 then resByte := 0
+    else resByte := ram[fullAdd].value+1;
+    if d_ = toF then begin
+      ram[fullAdd].value := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+    STATUS_Z := resByte = 0;
+    if STATUS_Z then begin
+      //salta una instrucción
+      if PCL = 255 then begin
+        PCL := 0;
+        inc(PCH);
+      end else begin
+        inc(PCL);
+      end;
+    end;
   end;
   IORWF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resByte := W or ram[fullAdd].value;
+    if d_ = toF then begin
+      ram[fullAdd].value := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+    STATUS_Z := resByte <> 0;
   end;
   MOVF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    if d_ = toF then begin
+      //no mueve, solo verifica
+      STATUS_Z := (ram[fullAdd].value = 0);
+    end else begin  //toW
+      w := ram[fullAdd].value;  //lee mapeado, si lo está
+      STATUS_Z := (W = 0);
+    end;
   end;
   MOVWF: begin
     fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    ram[fullAdd].Fvalue := W;// b_
+    ram[fullAdd].value := W;   //escribe a donde esté mapeado, (si está mapeado)
+    if (fullAdd and $7F) = $02 then begin
+      //Es el PCL
+      PCH := PCLATH;
+    end;
   end;
   NOP: begin
   end;
   RLF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resByte := ram[fullAdd].value;
+    bit7 := resByte and $80; //guarda bit 7
+    resByte := (resByte << 1) and $ff;  //desplaza
+    //pone C en bit bajo
+    if STATUS_C then begin  //C era 1
+      resByte := resByte or $01;  //pone a 1 el bit 0
+    end else begin          //C era 0
+      //no es necesario agregarlo, porque por defecto se agrega 0
+    end;
+    //Actualiza C
+    if bit7 = 0 then STATUS_C := false
+                else STATUS_C := true;
+    ram[fullAdd].value := resByte;
   end;
   RRF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resByte := ram[fullAdd].value;
+    bit0 := resByte and $01; //guarda bit 0
+    resByte := resByte >> 1;  //desplaza
+    //pone C en bit alto
+    if STATUS_C then begin  //C era 1
+      resByte := resByte or $80;  //pone a 1 el bit 0
+    end else begin          //C era 0
+      //no es necesario agregarlo, porque por defecto se agrega 0
+    end;
+    //Actualiza C
+    if bit0 = 0 then STATUS_C := false
+                else STATUS_C := true;
+    ram[fullAdd].value := resByte;
   end;
   SUBWF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resInt := ram[fullAdd].value - W;
+    if d_ = toF then begin
+      ram[fullAdd].value :=  resInt and $FF;
+    end else begin  //toW
+      w := resInt and $FF;
+    end;
+    STATUS_Z := (resInt = 0);
+    if resInt < 0 then STATUS_C := false   //negativo
+    else STATUS_C := true;
+    resInt := (ram[fullAdd].value and $0F) - (W and $0F);
+    if resInt < 0 then STATUS_DC := false   //negativo
+    else STATUS_DC := true;
   end;
   SWAPF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resNib := (ram[fullAdd].value and $0F) << 4;
+    resByte := (ram[fullAdd].value and $F0) >> 4;
+    ram[fullAdd].value := resNib or resByte;
   end;
   XORWF: begin
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resByte := W xor ram[fullAdd].value;
+    if d_ = toF then begin
+      ram[fullAdd].value := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+    STATUS_Z := resByte <> 0;
   end;
   //BIT-ORIENTED FILE REGISTER OPERATIONS
   BCF: begin
-      msk := $1 << b_;
-      msk := not msk;
-      fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-      ram[fullAdd].value := ram[fullAdd].value and msk;
+    msk := $1 << b_;
+    msk := not msk;
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    ram[fullAdd].value := ram[fullAdd].value and msk;
   end;
   BSF: begin
     msk := $1 << b_;
@@ -1164,38 +1366,110 @@ begin
     ram[fullAdd].value := ram[fullAdd].value or msk;// b_
   end;
   BTFSC: begin
+    msk := $1 << b_;
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    if (ram[fullAdd].value and msk) = 0 then begin
+      //salta una instrucción
+      if PCL = 255 then begin
+        PCL := 0;
+        inc(PCH);
+      end else begin
+        inc(PCL);
+      end;
+    end;
   end;
   BTFSS: begin
+    msk := $1 << b_;
+    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    if (ram[fullAdd].value and msk) <> 0 then begin
+      //salta una instrucción
+      if PCL = 255 then begin
+        PCL := 0;
+        inc(PCH);
+      end else begin
+        inc(PCL);
+      end;
+    end;
   end;
   //LITERAL AND CONTROL OPERATIONS
   ADDLW: begin
+    resWord := W + k_;
+    resNib := (W and $0F) + (k_ and $0F);
+    w := resWord and $FF;
+    STATUS_Z := (resWord and $ff) = 0;
+    STATUS_C := (resWord > 255);
+    STATUS_DC := (resNib > 15);
   end;
   ANDLW: begin
+    resByte := W and K_;
+    w := resByte;
+    STATUS_Z := resByte = 0;
   end;
   CALL: begin
+    //Guarda dirección en Pila
+    STACK[STKPTR] := PCH * 256 + PCL;
+    if STKPTR = 7 then STKPTR := 0 else STKPTR := STKPTR +1;
+    //En k, deben haber 11 bits
+    PCL := k_ and $FF;
+    PCH := word(k_ >> 8) or   //toma los 3 bits restantes de k
+           (PCLATH and %00011000);  //y completa con los bits 3 y 4 de PCLATH
+    exit;
   end;
   CLRWDT: begin
   end;
   GOTO_: begin
-      PCL := k_;
+      //En k, deben haber 11 bits
+      PCL := k_ and $FF;
+      PCH := byte(k_ >> 8) or   //toma los 3 bits restantes de k
+             (PCLATH and %00011000);  //y completa con los bits 3 y 4 de PCLATH
       exit;
   end;
   IORLW: begin
+    resByte := W or k_;
+    w := resByte;
+    STATUS_Z := resByte <> 0;
   end;
   MOVLW: begin
       W := k_;
   end;
   RETFIE: begin
+    //Saca dirección en Pila
+    if STKPTR = 0 then STKPTR := 7 else STKPTR := STKPTR - 1;
+    PCH := hi(STACK[STKPTR]);  //solo debería haber 5 bits
+    PCL := lo(STACK[STKPTR]);
+    //Activa GIE
+    INTCON_GIE := true;
   end;
   RETLW: begin
+    //Saca dirección en Pila
+    if STKPTR = 0 then STKPTR := 7 else STKPTR := STKPTR - 1;
+    PCH := hi(STACK[STKPTR]);  //solo debería haber 5 bits
+    PCL := lo(STACK[STKPTR]);
+    //Fija valor en W
+    W := k_;
   end;
   RETURN: begin
+    //Saca dirección en Pila
+    if STKPTR = 0 then STKPTR := 7 else STKPTR := STKPTR - 1;
+    PCH := hi(STACK[STKPTR]);  //solo debería haber 5 bits
+    PCL := lo(STACK[STKPTR]);
   end;
   SLEEP: begin
   end;
   SUBLW: begin
+    resInt := k_ - W;
+    w := resInt and $FF;
+    STATUS_Z := (resInt = 0);
+    if resInt < 0 then STATUS_C := false   //negativo
+    else STATUS_C := true;
+    resInt := (k_ and $0F) - (W and $0F);
+    if resInt < 0 then STATUS_DC := false   //negativo
+    else STATUS_DC := true;
   end;
   XORLW: begin
+    resByte := W xor k_;
+    w := resByte;
+    STATUS_Z := resByte <> 0;
   end;
   _Inval: begin
     MsjError := 'Invalid Opcode';
@@ -1210,10 +1484,11 @@ var
   i: Integer;
 begin
   PCL := 0;
-  PCLATCH := 0;
+  PCLATH := 0;
   PCH := 0;
   W := 0;
   ram[$03].Fvalue := %00011000;  //STATUS
+  STKPTR := 0;   //Posición inicial del puntero de pila
   //Limpia solamente el valro inicial, no toca los otros campos
   for i:=0 to high(ram) do begin
     ram[i].Fvalue := $00;
@@ -1261,7 +1536,7 @@ begin
     end;
   end;
 end;
-function TPIC16.GetFreeByte(var offs, bnk: byte): boolean;
+function TPIC16.GetFreeByte(out offs, bnk: byte): boolean;
 {Devuelve una dirección libre de la memoria flash (y el banco). Si encuentra espacio,
  devuelve TRUE.}
 begin
@@ -1327,8 +1602,8 @@ function TPIC16.GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;
  del tamaño indicado. Si encuentra espacio, devuelve TRUE.
  El tamaño se da en bytes, pero si el valor es negativo, se entiende que es en bits.}
 begin
-  //se asume 4 bancos
-  if          (NumBanks>0) and bank0.GetFreeBytes(size, offs) then begin
+  //Busca en lso 4 bancos
+  if (NumBanks>0) and bank0.GetFreeBytes(size, offs) then begin
     bnk := 0;      //encontró en este banco
     Result := true;
     exit;
@@ -1355,6 +1630,7 @@ end;
 function TPIC16.TotalMemRAM: word;
 {Devuelve el total de memoria RAM disponible}
 begin
+  Result := 0;
   case NumBanks of
   1: Result := bank0.TotalGPR;
   2: Result := bank0.TotalGPR + bank1.TotalGPR;
@@ -1364,12 +1640,14 @@ begin
 end;
 function TPIC16.UsedMemRAM: word;
 {Devuelve el total de memoria RAM usada}
+var
+  i: Integer;
 begin
-  case NumBanks of
-  1: Result := bank0.UsedGPR;
-  2: Result := bank0.UsedGPR + bank1.UsedGPR;
-  3: Result := bank0.UsedGPR + bank1.UsedGPR + bank2.UsedGPR;
-  4: Result := bank0.UsedGPR + bank1.UsedGPR + bank2.UsedGPR + bank3.UsedGPR;
+  Result := 0;
+  for i := 0 to word(NumBanks * $80) - 1 do begin
+    if (ram[i].state = cs_impleGPR) and (ram[i].used <> 0) and (ram[i].mappedTo = nil) then begin
+      Result := Result + 1;
+    end;
   end;
 end;
 procedure TPIC16.ExploreUsed(rutExplorRAM: TRutExplorRAM);
@@ -1494,7 +1772,7 @@ begin
       com := UpCase(trim(str));
       if com='' then continue;
       if length(com)<>11 then begin
-        MsjError := 'Memory definition syntax error: Bad size.';
+        MsjError := 'Memory definition syntax error: Bad string size.';
         exit(false);
       end;
       if com[4] <> '-' then begin
@@ -1518,8 +1796,9 @@ begin
       case staMem of
       'SFR': state := cs_impleSFR;
       'GPR': state := cs_impleGPR;
+      'NIM': state := cs_unimplem;
       else
-        MsjError := 'Memory definition syntax error: Wrong address.';
+        MsjError := 'Memory definition syntax error: Expected SFR or GPR';
         exit(false);
       end;
       //Ya se tienen los parámetros, para definir la memoria
@@ -1554,7 +1833,7 @@ begin
       com := UpCase(trim(str));
       if com='' then continue;
       if length(com)<>12 then begin
-        MsjError := 'Memory mapping syntax error: Bad size.';
+        MsjError := 'Memory mapping syntax error: Bad string size.';
         exit(false);
       end;
       if com[4] <> '-' then begin
@@ -1602,6 +1881,7 @@ end;
 function TPIC16.BankToAbsRAM(const offset, bank: byte): word;
 {Convierte una dirección y banco a una dirección absoluta}
 begin
+  Result := 0;
   case bank of
   0: Result := offset;
   1: Result := $80 +offset;
@@ -1651,6 +1931,7 @@ end;
 //funciones para la memoria Flash
 function TPIC16.UsedMemFlash: word;
 begin
+  Result := 0;
   case NumPages of
   1: Result := page0.Used;
   2: Result := page0.Used + page1.Used;
@@ -1779,7 +2060,6 @@ begin
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
   MaxFlash := PIC_PAGE_SIZE;  //En algunos casos, puede ser menor al tamaño de una página
-  GPRStart:=$20;   //dirección de inicio de los registros de usuario
   bank0.Init(0, $000, @ram);
   bank1.Init(1, $080, @ram);
   bank2.Init(2, $100, @ram);
