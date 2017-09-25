@@ -1,3 +1,19 @@
+1.1
+===
+Se modifica TPIC16.GenHex(), para que incluya dentro de sí, las funcionalidades de 
+TPIC16.GenHexData(), y se elimina TPIC16.GenHexData(), así como las funciones
+TFlashPage.StartHex() y TFlashPage.ExtractHex(), porque ya no son necesarias.
+Se modifica TPIC16.UsedMemFlash(), para no hacer uso de las páginas, y se elimina
+TFlashPage.Used().
+Se elimina TPIC16.ShowCode(), y se incluye su funcionalidad (sin manejo de páginas)
+en TPIC16.DumpCode().
+Se eliminan los campos minUsed, maxUsed, iHex y nUsed de TFlashPage, porque ya no 
+se usan. 
+Se implementa el método TPIC16.ExecNCycles(), y se implementa el conteo de ciclos
+de ejecución.
+Se incluyen condiciones para la detención de la ejecución.
+Se incluye el evento TPIC16.OnExecutionMsg.
+
 1.0
 ===
 Se mueve el método GetFreeBit() de TRAMBank a TPIC16.

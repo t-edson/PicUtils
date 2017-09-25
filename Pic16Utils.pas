@@ -134,15 +134,16 @@ type //Modelo de la memoria RAM
 
 type  //Models for Flash memory
   TPIC16FlashCell = record
-    value    : word;     //value of the memory
-    used     : boolean;  //indicate if have been written
+    value     : word;     //value of the memory
+    used      : boolean;  //indicate if have been written
     {Estos campos de cadena ocupan bastante espacio, aún cuado están en NULL. Si se
     quisiera optimizar el uso de RAM, se podría pensar en codificar, variso campos en
     una sola cadena.}
-    topLabel : string;   //label on the top of the cell.
-    topComment: string;  //comment on the top of the cell.
-    sideComment: string; //right comment to code
-
+    topLabel  : string;   //label on the top of the cell.
+    topComment: string;   //comment on the top of the cell.
+    sideComment: string;  //right comment to code
+    //Campos para deputación
+    breakPnt  : boolean;  //Indica que esta celda contiene un punto de interrupción
     {tener cuidado con el tamaño de este registro, pues se va a multiplicar por 8192}
   end;
   TPIC16Flash = array[0..PIC_MAX_FLASH-1] of TPIC16FlashCell;
@@ -157,40 +158,30 @@ type  //Models for Flash memory
     flash    : ptrPIC16Flash;  //puntero a memoria Flash
     AddrStart: word;           //dirección de inicio en la memoria flash total
   private
-    iHex : word;  //índice para exploración de memoria
-    nUsed: word;  //número de celdas usdas
     function Getmem(i : word): TPIC16FlashCell;
     procedure Setmem(i : word; AValue: TPIC16FlashCell);
   public
-    minUsed, maxUsed: word;  //información útil, por eso se publica
     procedure Init(AddrStart0: word; flash0: ptrPIC16Flash);  //inicia objeto
     property mem[i : word] : TPIC16FlashCell read Getmem write Setmem;
     //funciones para administración de la memoria
     function Total: word; //total de bytes que contiene
-    function Used: word;  //total de bytes usados por el usuario
-    //funciones para generación de archivo hex
-    procedure StartHex;  //inicia la extracción de líneas
-    function ExtractHex(out Addr: word): string;  //devuelve una línea de texto del código en hexadecimal
   end;
 
 type
   {Objeto que representa al hardware de un PIC de la serie 16}
   { TPIC16 }
   TPIC16 = class
-  private
-    hexLines : TStringList;   //usado para crear archivo *.hex
-    procedure GenHexComm(comment: string);
-    procedure GenHexData(Address: word; Data: string);
-    procedure GenHexData(var pg: TFlashPage);
-    procedure GenHexEOF;
-    procedure GenHexExAdd(Data: word);
+  private  //Creación de archivo *.hex
+    hexLines : TStringList;  //Uusado para crear archivo *.hex
+    minUsed  : word;         //Dirección menor de la ROM usada
+    maxUsed  : word;         //Dirección mayor de la ROM usdas
     function HexChecksum(const lin: string): string;
-    procedure ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom,
-      incVarNam: boolean);
-  private
-//    FCommonRAM: boolean;
+    procedure GenHexComm(comment: string);
+    procedure GenHexExAdd(Data: word);
+    procedure GenHexData(Address: word; Data: string);
+    procedure GenHexEOF;
     function StrHexFlash(i1, i2: integer): string;
-  private //campos para procesar instrucciones
+  private //Campos para procesar instrucciones
     FMaxFlash: integer;
     idIns: TPIC16Inst;    //ID de Instrucción.
     d_   : TPIC16destin;  //Destino de operación. Válido solo en algunas instrucciones.
@@ -225,10 +216,16 @@ type
     property INTCON_GIE: boolean read GetINTCON_GIE write SetINTCON_GIE;
   public   //Control de ejecución
     nClck : Int64;  //Contador de ciclos de reloj
+    CommStop: boolean;  //Bandera para detener la ejecución
+    OnExecutionMsg: procedure(message: string) of object;  //Genera mensaje en ejecución
     function CurInstruction: TPIC16Inst;
+    procedure Exec(pc: word);  //Ejecuta la instrucción en la dirección indicada.
     procedure Exec();  //Ejecuta instrucción actual
     procedure ExecTo(endAdd: word);  //Ejecuta hasta cierta dirección
+    procedure ExecNCycles(nCyc: integer; out stopped: boolean);  //Ejecuta hasta cierta dirección
     procedure Reset;
+    procedure AddBreakopint(pc: word);
+    procedure ToggleBreakopint(pc: word);
   public
     //memorias
     flash    : TPIC16Flash;   //memoria Flash
@@ -291,7 +288,7 @@ type
     procedure addTopComm(comm: string; replace: boolean = true);  //Add a comment to the ASM code
     procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
     procedure GenHex(hexFile: string; ConfigWord: integer = - 1);  //genera un archivo hex
-    procedure DumpCode(l: TStrings; incAdrr, incCom, incVarNam: boolean);  //vuelva en código que contiene
+    procedure DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);  //vuelva en código que contiene
   public
     constructor Create;
     destructor Destroy; override;
@@ -488,70 +485,6 @@ function TFlashPage.Total: word;
 begin
   Result := PIC_PAGE_SIZE;  //tamaño fijo
 end;
-function TFlashPage.Used: word;
-var
-  i: Integer;
-begin
-  Result := 0;
-  for i:=$0000 to PIC_PAGE_SIZE-1 do begin
-    if mem[i].used then inc(Result);
-  end;
-end;
-procedure TFlashPage.StartHex;
-{Prepara para una exploración del código con ExtractHex().  Actualiza las
-variables: iHex, nUsed, minUsed y maxUsed.
-Notar que la extracción de instrucciones, se hace de forma dencilla usando un
-solo bloque por página. Una extracción de código más precisa podría manejar
-diversos blqoues de código en una página.
- }
-var
-  i: Integer;
-begin
-  iHex := 0;  //inicia índice
-  //Busca la mínima y máxima posición de memoria usada
-  minUsed := PIC_PAGE_SIZE;  //valor máximo
-  maxUsed := $0000;  //valor máximo
-  nUsed := 0;  //aprovecha para calcular elementos usados
-  for i:=$0000 to PIC_PAGE_SIZE-1 do begin
-    if mem[i].used then begin
-      if i<minUsed then minUsed := i;
-      if i>maxUsed then maxUsed := i;
-      inc(nUsed);
-    end;
-  end;
-  iHex := minUsed;   //inicia índice
-end;
-function TFlashPage.ExtractHex(out Addr: word): string;
-{Devuelve una cadena (de longitud variable) con la lista del código binario que contiene,
-en forma de caracteres en hexadecimal, de la misma forma a como se usa en un archivo
-*.hex. En "Addr" devuelve la dirección absoluta de inicio desde donde lee.
-Debe llamarse, después de llamar a StartHex(). Con cada llamada, devuelve los bloques
-consecutivos de datos. Si no hay más datos devuelve cadena vacía.}
-const MAX_INS_HEX = 8;  //Número máximo de instrucciones que devuelve por pasada
-var
-  tmp: String;
-  nInst: Integer;
-begin
-  if nUsed = 0 then begin  //no hay datos
-    Result := '';
-    exit;
-  end;
-  //Hay datos y los límites están en minUsed y maxUsed
-  if iHex > maxUsed then begin  //llegó al final
-    Result := '';
-    exit;
-  end;
-  //extrae bloques de instrucciones
-  Result := '';
-  Addr := iHex + AddrStart;
-  nInst := 0;
-  while (iHex<=maxUsed) and (nInst<MAX_INS_HEX) do begin
-    tmp := IntToHex(mem[iHex].value,4);
-    Result +=copy(tmp,3,2) + copy(tmp,1,2);  //se graba con los bytes invertidos
-    Inc(iHex);  //pasa al siguiente
-    Inc(nInst);
-  end;
-end;
 
 { TPIC16 }
 procedure TPIC16.useFlash;
@@ -720,7 +653,7 @@ begin
     flash[iFlash].sideComment+=comm;   //se agrega al que pudiera haber
   end;
 end;
-
+//Creación de archivo *.hex
 function TPIC16.HexChecksum(const lin:string): string;
 //Devuelve los caracteres en hexadecimal del Checksum, para el archivo *.hex
 var
@@ -739,6 +672,11 @@ begin
    inc(chk);        //complemento a 2
    part := IntToHex(chk,4);  //a hexadecimal
    Result := copy(part, length(part)-1,2);  //recorta
+end;
+procedure TPIC16.GenHexComm(comment: string);
+//Agrega una línea de comentario al archivo *.hex
+begin
+  hexLines.Add(';'+comment);
 end;
 procedure TPIC16.GenHexExAdd(Data: word);
 //Agrega una línea de Extended Address al archivo *.hex
@@ -762,33 +700,14 @@ begin
   lin:= IntToHex(ByteCount,2) + IntToHex(Address*2,4) + RecordType +  Data;
   hexLines.Add(':'+lin + HexChecksum(lin));
 end;
-procedure TPIC16.GenHexData(var pg: TFlashPage);
-//Genera líneas de datos en hexLines, usando una página
-var
-  dat: String;
-  addr: word;
-begin
-  pg.StartHex;  //prepara extracción de datos
-  dat := pg.ExtractHex(addr);
-  while dat <>'' do begin
-     GenHexData(addr, dat);
-     dat := pg.ExtractHex(addr);
-  end;
-end;
 procedure TPIC16.GenHexEOF;
 //Agrega una línea de Extended Address al archivo *.hex
 begin
   hexLines.Add(':00000001FF');
 end;
-procedure TPIC16.GenHexComm(comment: string);
-//Agrega una línea de comentario al archivo *.hex
-begin
-  hexLines.Add(';'+comment);
-end;
 function  TPIC16.StrHexFlash(i1, i2: integer): string;
 {Devuelve la cadena, de bytes hexadecimales de la memoria Flash, desde la posición
- i1 hasta i2. No se espera usar función porque se puede obteenr esta infromación
- pidiéndosela a los objetos de página}
+ i1 hasta i2.}
 var
   i: Integer;
   tmp: String;
@@ -799,6 +718,79 @@ begin
     Result+=copy(tmp,3,2) + copy(tmp,1,2);  //se graba con los bytes invertidos
   end;
 end;
+//Campos para procesar instrucciones
+function TPIC16.GetBank(i : Longint): TRAMBank;
+begin
+  case i of
+  0: Result := bank0;
+  1: Result := bank1;
+  2: Result := bank2;
+  3: Result := bank3;
+  else
+    Result := bank0;
+  end;
+end;
+function TPIC16.GetPage(i: Longint): TFlashPage;
+begin
+  case i of
+  0: Result := page0;
+  1: Result := page1;
+  2: Result := page2;
+  3: Result := page3;
+  else
+    Result := page0;
+  end;
+end;
+function TPIC16.GetSTATUS: byte;
+begin
+  Result := ram[$03].Fvalue;
+end;
+function TPIC16.GetSTATUS_Z: boolean;
+begin
+  Result := (ram[$03].Fvalue and %00000100) <> 0;
+end;
+procedure TPIC16.SetSTATUS_Z(AValue: boolean);
+begin
+  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000100
+            else ram[$03].Fvalue := ram[$03].Fvalue and %11111011;
+end;
+function TPIC16.GetSTATUS_C: boolean;
+begin
+  Result := (ram[$03].Fvalue and %00000001) <> 0;
+end;
+procedure TPIC16.SetSTATUS_C(AValue: boolean);
+begin
+  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000001
+            else ram[$03].Fvalue := ram[$03].Fvalue and %11111110;
+end;
+function TPIC16.GetSTATUS_DC: boolean;
+begin
+  Result := (ram[$03].Fvalue and %00000010) <> 0;
+end;
+procedure TPIC16.SetSTATUS_DC(AValue: boolean);
+begin
+  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000010
+            else ram[$03].Fvalue := ram[$03].Fvalue and %11111101;
+end;
+function TPIC16.GetINTCON: byte;
+begin
+  Result := ram[$0B].Fvalue;
+end;
+function TPIC16.GetINTCON_GIE: boolean;
+begin
+  Result := (ram[$0B].Fvalue and %10000000) <> 0;
+end;
+procedure TPIC16.SetINTCON_GIE(AValue: boolean);
+begin
+  if AVAlue then ram[$0B].Fvalue := ram[$0B].Fvalue or  %10000000
+            else ram[$0B].Fvalue := ram[$0B].Fvalue and %01111111;
+end;
+procedure TPIC16.SetMaxFlash(AValue: integer);
+begin
+  if FMaxFlash = AValue then Exit;
+  FMaxFlash := AValue;
+end;
+
 procedure TPIC16.Decode(const opCode: word);
 {Decodifica la instrucción indicada. Actualiza siempre la variable "idIns", y
 dependiendo de la instrucción, puede actualizar: d_, f_, b_ y k_}
@@ -1072,77 +1064,6 @@ begin
     Result := 'Invalid'
   end;
 end;
-function TPIC16.GetBank(i : Longint): TRAMBank;
-begin
-  case i of
-  0: Result := bank0;
-  1: Result := bank1;
-  2: Result := bank2;
-  3: Result := bank3;
-  else
-    Result := bank0;
-  end;
-end;
-function TPIC16.GetPage(i: Longint): TFlashPage;
-begin
-  case i of
-  0: Result := page0;
-  1: Result := page1;
-  2: Result := page2;
-  3: Result := page3;
-  else
-    Result := page0;
-  end;
-end;
-function TPIC16.GetSTATUS: byte;
-begin
-  Result := ram[$03].Fvalue;
-end;
-function TPIC16.GetSTATUS_Z: boolean;
-begin
-  Result := (ram[$03].Fvalue and %00000100) <> 0;
-end;
-procedure TPIC16.SetSTATUS_Z(AValue: boolean);
-begin
-  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000100
-            else ram[$03].Fvalue := ram[$03].Fvalue and %11111011;
-end;
-function TPIC16.GetSTATUS_C: boolean;
-begin
-  Result := (ram[$03].Fvalue and %00000001) <> 0;
-end;
-procedure TPIC16.SetSTATUS_C(AValue: boolean);
-begin
-  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000001
-            else ram[$03].Fvalue := ram[$03].Fvalue and %11111110;
-end;
-function TPIC16.GetSTATUS_DC: boolean;
-begin
-  Result := (ram[$03].Fvalue and %00000010) <> 0;
-end;
-procedure TPIC16.SetSTATUS_DC(AValue: boolean);
-begin
-  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000010
-            else ram[$03].Fvalue := ram[$03].Fvalue and %11111101;
-end;
-function TPIC16.GetINTCON: byte;
-begin
-  Result := ram[$0B].Fvalue;
-end;
-function TPIC16.GetINTCON_GIE: boolean;
-begin
-  Result := (ram[$0B].Fvalue and %10000000) <> 0;
-end;
-procedure TPIC16.SetINTCON_GIE(AValue: boolean);
-begin
-  if AVAlue then ram[$0B].Fvalue := ram[$0B].Fvalue or  %10000000
-            else ram[$0B].Fvalue := ram[$0B].Fvalue and %01111111;
-end;
-procedure TPIC16.SetMaxFlash(AValue: integer);
-begin
-  if FMaxFlash = AValue then Exit;
-  FMaxFlash := AValue;
-end;
 function TPIC16.CurInstruction: TPIC16Inst;
 {Devuelve la instrucción, a la cue apunta PC, actualmente}
 var
@@ -1153,11 +1074,19 @@ begin
   Result := idIns;
 end;
 procedure TPIC16.Exec;
-{Ejecuta la instrución actual.
+{Executa la instrucción actual}
+var
+  pc: word;
+begin
+  pc := PCH*256+PCL;
+  Exec(pc);
+end;
+procedure TPIC16.Exec(pc: word);
+{Ejecuta la instrución actual con dirección "pc".
 Falta implementar las operaciones, cuando acceden al registro INDF, falta el SLEEP, el
 Watchdog timer, los contadores, las interrupciones}
 var
-  val: Word;
+  opc: Word;
   fullAdd: word;
   msk, resNib: byte;
   resByte, bit7, bit0: byte;
@@ -1165,8 +1094,8 @@ var
   resInt : integer;
 begin
   //Decodifica instrucción
-  val := flash[PCH*256+PCL].value; // page0.mem[PCL].value;
-  Decode(val);   //decodifica instrucción
+  opc := flash[pc].value; // page0.mem[PCL].value;
+  Decode(opc);   //decodifica instrucción
   case idIns of
   ADDWF: begin
     fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
@@ -1239,6 +1168,7 @@ begin
       end else begin
         inc(PCL);
       end;
+      Inc(nClck);   //En este caso toma un ciclo más
     end;
   end;
   INCF: begin
@@ -1270,6 +1200,7 @@ begin
       end else begin
         inc(PCL);
       end;
+      Inc(nClck);   //En este caso toma un ciclo más
     end;
   end;
   IORWF: begin
@@ -1388,6 +1319,7 @@ begin
       end else begin
         inc(PCL);
       end;
+      Inc(nClck);   //En este caso toma un ciclo más
     end;
   end;
   BTFSS: begin
@@ -1401,6 +1333,7 @@ begin
       end else begin
         inc(PCL);
       end;
+      Inc(nClck);   //En este caso toma un ciclo más
     end;
   end;
   //LITERAL AND CONTROL OPERATIONS
@@ -1420,11 +1353,18 @@ begin
   CALL: begin
     //Guarda dirección en Pila
     STACK[STKPTR] := PCH * 256 + PCL;
-    if STKPTR = 7 then STKPTR := 0 else STKPTR := STKPTR +1;
+    if STKPTR = 7 then begin
+      //Desborde de pila
+      STKPTR := 0;
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stack Overflow on CALL OpCode at $' + IntToHex(pc,4));
+    end else begin
+      STKPTR := STKPTR +1;
+    end;
     //En k, deben haber 11 bits
     PCL := k_ and $FF;
     PCH := word(k_ >> 8) or   //toma los 3 bits restantes de k
            (PCLATH and %00011000);  //y completa con los bits 3 y 4 de PCLATH
+    Inc(nClck,2);   //Esta instrucción toma dos ciclos
     exit;
   end;
   CLRWDT: begin
@@ -1434,6 +1374,7 @@ begin
       PCL := k_ and $FF;
       PCH := byte(k_ >> 8) or   //toma los 3 bits restantes de k
              (PCLATH and %00011000);  //y completa con los bits 3 y 4 de PCLATH
+      Inc(nClck,2);   //Esta instrucción toma dos ciclos
       exit;
   end;
   IORLW: begin
@@ -1446,25 +1387,46 @@ begin
   end;
   RETFIE: begin
     //Saca dirección en Pila
-    if STKPTR = 0 then STKPTR := 7 else STKPTR := STKPTR - 1;
+    if STKPTR = 0 then begin
+      //Desborde de pila
+      STKPTR := 7;
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stack Overflow on RETFIE OpCode at $' + IntToHex(pc,4));
+    end else begin
+      STKPTR := STKPTR - 1;
+    end;
     PCH := hi(STACK[STKPTR]);  //solo debería haber 5 bits
     PCL := lo(STACK[STKPTR]);
+    Inc(nClck);   //Esta instrucción toma un ciclo más
     //Activa GIE
     INTCON_GIE := true;
   end;
   RETLW: begin
     //Saca dirección en Pila
-    if STKPTR = 0 then STKPTR := 7 else STKPTR := STKPTR - 1;
+    if STKPTR = 0 then begin
+      //Desborde de pila
+      STKPTR := 7;
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stack Overflow on RETLW OpCode at $' + IntToHex(pc,4));
+    end else begin
+      STKPTR := STKPTR - 1;
+    end;
     PCH := hi(STACK[STKPTR]);  //solo debería haber 5 bits
     PCL := lo(STACK[STKPTR]);
+    Inc(nClck);   //Esta instrucción toma un ciclo más
     //Fija valor en W
     W := k_;
   end;
   RETURN: begin
     //Saca dirección en Pila
-    if STKPTR = 0 then STKPTR := 7 else STKPTR := STKPTR - 1;
+    if STKPTR = 0 then begin
+      //Desborde de pila
+      STKPTR := 7;
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stack Overflow on RETURN OpCode at $' + IntToHex(pc,4));
+    end else begin
+      STKPTR := STKPTR - 1;
+    end;
     PCH := hi(STACK[STKPTR]);  //solo debería haber 5 bits
     PCL := lo(STACK[STKPTR]);
+    Inc(nClck);   //Esta instrucción toma un ciclo más
   end;
   SLEEP: begin
   end;
@@ -1499,11 +1461,68 @@ end;
 procedure TPIC16.ExecTo(endAdd: word);
 {Ejecuta las instrucciones secuencialmente, desde la instrucción actual, hasta que el
 contador del programa, sea igual a la dirección "endAdd".}
+var
+  pc: word;
 begin
-  while PCL <> endAdd do begin
+  pc := PCH<<8+PCL;
+  while pc <> endAdd do begin
+    if flash[pc].breakPnt then begin
+      //Encontró un BreakPoint, sale sin ejecutar esa instrucción
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stopped for breakpoint.');
+//      stopped := true;
+      exit;
+    end;
     //Ejecuta
-    Exec();
+    Exec(pc);
+    pc := PCH<<8+PCL;  //Actuliza Contador de programa
   end;
+end;
+procedure TPIC16.ExecNCycles(nCyc: integer; out stopped: boolean);
+{Ejecuta el número de ciclos indicados, o hasta que se produzca alguna condición
+externa, que puede ser:
+* Se encuentre un Punto de Interrupción.
+* Se detecta la señal, de detenerse.
+* Se genere algún error en la ejecución.
+* Se ejecuta la instrucción SLEEP.
+la bandera "stopped", indica que se ha detendio la ejecución sin completar la cantidad
+de instrucciones requeridas.
+Normalmente Se ejecutará el número de ciclos indicados, pero en algunos casos se
+ejecutará un ciclo más, debido a que algunas instrucciones toman dos ciclos.}
+var
+  clkEnd: Int64;
+  pc: word;
+begin
+  clkEnd := nClck + nCyc;   //Valor final del contador
+  while nClck < clkEnd do begin
+    pc := PCH<<8+PCL;
+    if flash[pc].breakPnt then begin
+      //Encontró un BreakPoint, sale sin ejecutar esa instrucción
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stopped for breakpoint.');
+      stopped := true;
+      exit;
+    end;
+    if not flash[pc].used then begin
+      //Encontró un BreakPoint, sale sin ejecutar esa instrucción
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stopped for executing unused code.');
+      stopped := true;
+      exit;
+    end;
+    if CommStop then begin
+      //Se detectó el comando STOP
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stopped for STOP command.');
+      stopped := true;
+      exit;
+    end;
+    //Ejecuta
+    Exec(pc);
+    if idIns = SLEEP then begin
+      //Encontró un BreakPoint, sale sin ejecutar esa instrucción
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stopped for SLEEP Opcode.');
+      stopped := true;
+      exit;
+    end;
+  end;
+  stopped := false;
 end;
 procedure TPIC16.Reset;
 //Reinicia el dipsoitivo
@@ -1517,13 +1536,26 @@ begin
   ram[$03].Fvalue := %00011000;  //STATUS
   STKPTR := 0;   //Posición inicial del puntero de pila
   nClck := 0;    //Inicia contador de ciclos
-  //Limpia solamente el valro inicial, no toca los otros campos
+  CommStop := false;  //Limpia bandera
+  //Limpia solamente el valor inicial, no toca los otros campos
   for i:=0 to high(ram) do begin
     ram[i].Fvalue := $00;
   end;
 end;
+procedure TPIC16.AddBreakopint(pc: word);
+//Agrega un punto de interrupción
+begin
+  if pc>=PIC_MAX_FLASH then exit;
+  flash[pc].breakPnt := true;
+end;
+procedure TPIC16.ToggleBreakopint(pc: word);
+//COnmuta el estado del Punto de Interrupción, en la posición indicada
+begin
+  if pc>=PIC_MAX_FLASH then exit;
+  flash[pc].breakPnt := not flash[pc].breakPnt;
+end;
 
-//funciones para la memoria RAM
+//Funciones para la memoria RAM
 function TPIC16.GetFreeBit(var offs, bnk, bit: byte): boolean;
 {Devuelve una dirección libre de la memoria RAM (y el banco). Si encuentra espacio,
  devuelve TRUE.}
@@ -1955,16 +1987,14 @@ begin
   if (bit>7) then exit;
   ram[BankToAbsRAM(addr, bnk)].bitname[bit] := nam;
 end;
-
-//funciones para la memoria Flash
+//Funciones para la memoria Flash
 function TPIC16.UsedMemFlash: word;
+var
+  i: Integer;
 begin
   Result := 0;
-  case NumPages of
-  1: Result := page0.Used;
-  2: Result := page0.Used + page1.Used;
-  3: Result := page0.Used + page1.Used + page2.Used;
-  4: Result := page0.Used + page1.Used + page2.Used + page3.Used;
+  for i:=$0000 to PIC_MAX_FLASH-1 do begin
+    if flash[i].used then inc(Result);
   end;
 end;
 procedure TPIC16.ClearMemFlash;
@@ -1974,38 +2004,95 @@ begin
   for i:=0 to high(flash) do begin
     flash[i].value := $3FFF;
     flash[i].used := false;
+    flash[i].breakPnt := false;
     flash[i].topLabel   := '';
     flash[i].sideComment:= '';
     flash[i].topComment := '';
   end;
 end;
 procedure TPIC16.GenHex(hexFile: string; ConfigWord: integer = -1);
+{Genera el archivo *.hex, a partir de los datos almacenados en la memoria
+FLASH.
+Actualiza los campos, minUsed y maxUsed.}
 var
   cfg, tmp: String;
+  iHex: word;  //Índice para explorar
+  dat: String; //Cadena de dígitos hexadecimales
+  addr: word;  //Dirección de inicio
+const
+  MAX_INS_HEX = 8;  //Número máximo de instrucciones que devuelve por pasada
+
+  function ExtractHex(out Addre: word): string;
+  {Devuelve una cadena (de longitud que varía desde 0, hasta MAX_INS_HEX*4 caracteres)
+  con valores en hexadecimal de isntrucciones, consecutivas usadas, en le memoria FLASH.
+  La lectura se hace a partir de iHex, y los caracteres en hexadecimal se escriben en 4
+  dígitos, en la misma forma que se usan para los archivos *.HEX.
+  En "Addr" devuelve la dirección absoluta de inicio desde donde lee. Con cada llamada,
+  devuelve los bloques consecutivos de datos. Si no hay más datos devuelve cadena vacía.}
+  var p1, p2: word;
+      cont, p: word;
+      tmp: String;
+  begin
+    Result := '';
+    //Busca inicio de instrucciones usadas, desde la posición iHex
+    while (iHex<PIC_MAX_FLASH) and not flash[iHex].used  do begin
+      inc(iHex);
+    end;
+    if iHex>=PIC_MAX_FLASH then begin
+      //Llegó al final
+      exit;  //sale con cadena nula
+    end;
+    //Ya encontró el inicio ahora busca celdas consecutivas
+    p1 := iHex;
+    Addre := p1;
+    cont := 2;  //inicia contador
+    inc(iHex);  //pasa al siguiente
+    while (iHex<PIC_MAX_FLASH) and (cont<MAX_INS_HEX) and flash[iHex].used do begin
+      inc(iHex);
+      inc(cont);
+    end;
+    if iHex>=PIC_MAX_FLASH then begin
+      //Salió porque Llegó al final
+      p2 := PIC_MAX_FLASH-1;
+    end else if cont>=MAX_INS_HEX then begin
+      //Salió porque llegó al máximo de celdas
+      if flash[iHex].used then begin
+        //La ultima celda estaba ocupada
+        p2 := iHex;
+        inc(iHex);   //deja listo para la siguiente exploración
+      end else begin
+        //La ultima celda estaba ocupada
+        p2 := iHex-1;
+        //iHex, queda apuntando a la siguiente celda
+      end;
+    end else begin
+      //Salió porque encontró celda sin usar
+      p2 := iHex-1;
+      //iHex, queda apuntando a la siguiente celda
+    end;
+    //Ya tiene las dos posiciones
+    for p:=p1 to p2 do begin
+      if p1<minUsed then minUsed := p1;   //Actualiza
+      if p2>maxUsed then maxUsed := p2;   //Actualiza
+      tmp := IntToHex(flash[p].value, 4);
+      Result +=copy(tmp,3,2) + copy(tmp,1,2);  //se graba con los bytes invertidos
+    end;
+  end;
+
 begin
-  hexLines.Clear;
+  hexLines.Clear;      //Se usará la lista hexLines
   GenHexExAdd($0000);
-  //escribe datos
-  case NumPages of
-  1: begin
-      GenHexData(page0);
+  //Prepara extracción de datos
+  minUsed := PIC_MAX_FLASH;
+  maxUsed := 0;
+  iHex := 0;
+  //Inicia la extracción de código
+  dat := ExtractHex(addr);
+  while dat <>'' do begin
+     GenHexData(addr, dat);
+     dat := ExtractHex(addr);
   end;
-  2:begin
-      GenHexData(page0);
-      GenHexData(page1);
-  end;
-  3: begin
-      GenHexData(page0);
-      GenHexData(page1);
-      GenHexData(page2);
-  end;
-  4: begin
-      GenHexData(page0);
-      GenHexData(page1);
-      GenHexData(page2);
-      GenHexData(page3);
-  end;
-  end;
+  //Bits de configuración
   if ConfigWord<>-1 then begin
     //Se pide generar bits de configuración
     {Los bits de configuración para la serie 16F, se almacenan en:
@@ -2015,27 +2102,25 @@ EEPROM: 0x2100 (0x4200 in the HEX file) }
     tmp +=copy(cfg,3,2) + copy(cfg,1,2);  //se graba con los bytes invertidos
     GenHexData($2007, tmp);
   end;
-  GenHexEOF;  //fin de archivo
-  GenHexComm(self.Model);   //comentario
-  hexLines.SaveToFile(hexFile);  //genera archivo
+  GenHexEOF;                    //Fin de archivo
+  GenHexComm(self.Model);       //Comentario
+  hexLines.SaveToFile(hexFile); //Genera archivo
 end;
-procedure TPIC16.ShowCode(lOut: TStrings; pag: TFlashPage; incAdrr, incCom, incVarNam: boolean);
-{Muestra el código desensamblado de una página}
+procedure TPIC16.DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);
+{Desensambla las instrucciones grabadas en el PIC.
+ Se debe llamar despues de llamar a GenHex(), para que se actualicen las variables}
 var
-  i: Word;
-  val: Word;
-  comLin: string;   //comentario de línea
-  comLat: string;   //comentario lateral
-  lin , lblLin: string;
+  val, i: Word;
+  lblLin, comLat, comLin, lin: String;
 begin
-  if pag.nUsed = 0 then exit; //no hay datos
-  for i:=pag.minUsed to pag.maxUsed do begin
+  //Se supone que minUsed y maxUsed, ya deben haber sido actualizados.
+  for i := minUsed to maxUsed do begin
     //Lee comentarios y etiqueta
-    lblLin := pag.mem[i].topLabel;
-    comLat := pag.mem[i].sideComment;
-    comLin := pag.mem[i].topComment;
+    lblLin := flash[i].topLabel;
+    comLat := flash[i].sideComment;
+    comLin := flash[i].topComment;
     //Decodifica instrucción
-    val := pag.mem[i].value;
+    val := flash[i].value;
     Decode(val);   //decodifica instrucción
     //Escribe etiqueta al inicio de línea
     if lblLin<>'' then lOut.Add(lblLin+':');
@@ -2052,31 +2137,6 @@ begin
       lin := lin  + ' ' + comLat;
     end;
     lOut.Add('    ' + lin);
-  end;
-end;
-procedure TPIC16.DumpCode(l: TStrings; incAdrr, incCom, incVarNam: boolean);
-{Desensambla las instrucciones grabadas en el PIC.
- Se debe llamar despues de llamar a GenHex(), para que se actualicen las variables}
-begin
-  case NumPages of
-  1: begin
-      ShowCode(l, page0, incAdrr, incCom, incVarNam);
-  end;
-  2:begin
-      ShowCode(l, page0, incAdrr, incCom, incVarNam);
-      ShowCode(l, page1, incAdrr, incCom, incVarNam);
-  end;
-  3:begin
-      ShowCode(l, page0, incAdrr, incCom, incVarNam);
-      ShowCode(l, page1, incAdrr, incCom, incVarNam);
-      ShowCode(l, page2, incAdrr, incCom, incVarNam);
-  end;
-  4:begin
-      ShowCode(l, page0, incAdrr, incCom, incVarNam);
-      ShowCode(l, page1, incAdrr, incCom, incVarNam);
-      ShowCode(l, page2, incAdrr, incCom, incVarNam);
-      ShowCode(l, page3, incAdrr, incCom, incVarNam);
-  end;
   end;
 end;
 constructor TPIC16.Create;
