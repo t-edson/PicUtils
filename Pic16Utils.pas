@@ -1464,6 +1464,10 @@ contador del programa, sea igual a la dirección "endAdd".}
 var
   pc: word;
 begin
+  //Hace una primera ejecución, sin verificar Breakpoints
+  pc := PCH<<8+PCL;
+  Exec(pc);
+  //Ejecuta cíclicamnente
   pc := PCH<<8+PCL;
   while pc <> endAdd do begin
     if flash[pc].breakPnt then begin
