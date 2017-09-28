@@ -195,16 +195,21 @@ type
     function GetSTATUS: byte;
     function GetSTATUS_C: boolean;
     function GetSTATUS_DC: boolean;
+    function GetSTATUS_IRP: boolean;
     function GetSTATUS_Z: boolean;
     procedure SetINTCON_GIE(AValue: boolean);
     procedure SetSTATUS_C(AValue: boolean);
     procedure SetSTATUS_DC(AValue: boolean);
+    procedure SetSTATUS_IRP(AValue: boolean);
     procedure SetSTATUS_Z(AValue: boolean);
     procedure SetMaxFlash(AValue: integer);
+    procedure SetFRAM(value: byte);
+    function GetFRAM: byte;
   public   //Campos que modelan a los registros internos
     W        : byte;   //Registro de trabajo
     PCL      : byte;   //Contador de Programa L
     PCH      : byte;   //Contador de Programa H
+    //pc     : word absolute PCL. //Se debería optimziar así, viendo compatib. en el hardware
     PCLATH   : byte;   //Contador de Programa H
     STKPTR   : 0..7;   //Puntero de pila
     STACK    : array[0..7] of word;
@@ -212,8 +217,10 @@ type
     property STATUS_Z: boolean read GetSTATUS_Z write SetSTATUS_Z;
     property STATUS_C: boolean read GetSTATUS_C write SetSTATUS_C;
     property STATUS_DC: boolean read GetSTATUS_DC write SetSTATUS_DC;
+    property STATUS_IRP: boolean read GetSTATUS_IRP write SetSTATUS_IRP;
     property INTCON: byte read GetINTCON;
     property INTCON_GIE: boolean read GetINTCON_GIE write SetINTCON_GIE;
+    property FRAM: byte read GetFRAM write SetFRAM;
   public   //Control de ejecución
     nClck : Int64;  //Contador de ciclos de reloj
     CommStop: boolean;  //Bandera para detener la ejecución
@@ -772,6 +779,15 @@ begin
   if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000010
             else ram[$03].Fvalue := ram[$03].Fvalue and %11111101;
 end;
+function TPIC16.GetSTATUS_IRP: boolean;
+begin
+  Result := (ram[$03].Fvalue and %10000000) <> 0;
+end;
+procedure TPIC16.SetSTATUS_IRP(AValue: boolean);
+begin
+  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %10000000
+            else ram[$03].Fvalue := ram[$03].Fvalue and %01111111;
+end;
 function TPIC16.GetINTCON: byte;
 begin
   Result := ram[$0B].Fvalue;
@@ -789,6 +805,46 @@ procedure TPIC16.SetMaxFlash(AValue: integer);
 begin
   if FMaxFlash = AValue then Exit;
   FMaxFlash := AValue;
+end;
+procedure TPIC16.SetFRAM(value: byte);
+{Escribe en la RAM; en la dirección global f_, el valor "value"
+Para determinar el valor real de la dirección, se toma en cuenta los bits de STATUS}
+begin
+  if f_ = 0 then begin
+    //Caso especial de direccionamiento indirecto
+    if STATUS_IRP then begin
+      ram[ram[04].value + $100].value := value;
+    end else begin
+      ram[ram[04].value].value := value;
+    end;
+    exit;
+  end;
+  case STATUS and %01100000 of
+  %00000000: ram[f_     ].value := value;
+  %00100000: ram[f_+ $80].value := value;
+  %01000000: ram[f_+$100].value := value;
+  %01100000: ram[f_+$180].value := value;
+  end;
+end;
+function TPIC16.GetFRAM: byte;
+{Devuelve el valor de la RAM, de la posición global f_.
+Para determinar el valor real de la dirección, se toma en cuenta los bits de STATUS}
+begin
+  if f_ = 0 then begin
+    //Caso especial de direccionamiento indirecto
+    if STATUS_IRP then begin
+      Result := ram[ram[04].value + $100].value;
+    end else begin
+      Result := ram[ram[04].value].value;
+    end;
+    exit;
+  end;
+  case STATUS and %01100000 of
+  %00000000: Result := ram[f_     ].value;
+  %00100000: Result := ram[f_+ $80].value;
+  %01000000: Result := ram[f_+$100].value;
+  %01100000: Result := ram[f_+$180].value;
+  end;
 end;
 
 procedure TPIC16.Decode(const opCode: word);
@@ -1083,11 +1139,11 @@ begin
 end;
 procedure TPIC16.Exec(pc: word);
 {Ejecuta la instrución actual con dirección "pc".
-Falta implementar las operaciones, cuando acceden al registro INDF, falta el SLEEP, el
-Watchdog timer, los contadores, las interrupciones}
+Falta implementar las operaciones, cuando acceden al registro INDF, el Watchdog timer,
+los contadores, las interrupciones}
 var
   opc: Word;
-  fullAdd: word;
+  //fullAdd: word;
   msk, resNib: byte;
   resByte, bit7, bit0: byte;
   resWord: word;
@@ -1098,11 +1154,11 @@ begin
   Decode(opc);   //decodifica instrucción
   case idIns of
   ADDWF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resWord := W + ram[fullAdd].value;
-    resNib := (W and $0F) + (ram[fullAdd].value and $0F);
+    resByte := FRAM;
+    resWord := W + resByte;
+    resNib := (W and $0F) + (resByte and $0F);
     if d_ = toF then begin
-      ram[fullAdd].value := resWord and $FF;
+      FRAM := resWord and $FF;
     end else begin  //toW
       w := resWord and $FF;
     end;
@@ -1111,18 +1167,16 @@ begin
     STATUS_DC := (resNib > 15);
   end;
   ANDWF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resByte := W and ram[fullAdd].value;
+    resByte := W and FRAM;
     if d_ = toF then begin
-      ram[fullAdd].value := resByte;
+      FRAM := resByte;
     end else begin  //toW
       w := resByte;
     end;
     STATUS_Z := resByte = 0;
   end;
   CLRF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    ram[fullAdd].value := 0;
+    FRAM := 0;
     STATUS_Z := true;
   end;
   CLRW: begin
@@ -1130,32 +1184,29 @@ begin
     STATUS_Z := true;
   end;
   COMF : begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resByte := not ram[fullAdd].value;
+    resByte := not FRAM;
     if d_ = toF then begin
-      ram[fullAdd].value := resByte;
+      FRAM := resByte;
     end else begin  //toW
       w := resByte;
     end;
     STATUS_Z := resByte = 0;
   end;
   DECF : begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    if ram[fullAdd].value = 0 then resByte := $FF
-    else resByte := ram[fullAdd].value-1;
+    resByte := FRAM;
+    if resByte = 0 then resByte := $FF else dec(resByte);
     if d_ = toF then begin
-      ram[fullAdd].value := resByte;
+      FRAM := resByte;
     end else begin  //toW
       w := resByte;
     end;
     STATUS_Z := resByte = 0;
   end;
   DECFSZ: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    if ram[fullAdd].value = 0 then resByte := $FF
-    else resByte := ram[fullAdd].value-1;
+    resByte := FRAM;
+    if resByte = 0 then resByte := $FF else dec(resByte);
     if d_ = toF then begin
-      ram[fullAdd].value := resByte;
+      FRAM := resByte;
     end else begin  //toW
       w := resByte;
     end;
@@ -1172,22 +1223,20 @@ begin
     end;
   end;
   INCF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    if ram[fullAdd].value = 255 then resByte := 0
-    else resByte := ram[fullAdd].value+1;
+    resByte := FRAM;
+    if resByte = 255 then resByte := 0 else inc(resByte);
     if d_ = toF then begin
-      ram[fullAdd].value := resByte;
+      FRAM := resByte;
     end else begin  //toW
       w := resByte;
     end;
     STATUS_Z := resByte = 0;
   end;
   INCFSZ: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    if ram[fullAdd].value = 255 then resByte := 0
-    else resByte := ram[fullAdd].value+1;
+    resByte := FRAM;
+    if resByte = 255 then resByte := 0 else inc(resByte);
     if d_ = toF then begin
-      ram[fullAdd].value := resByte;
+      FRAM := resByte;
     end else begin  //toW
       w := resByte;
     end;
@@ -1204,38 +1253,34 @@ begin
     end;
   end;
   IORWF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resByte := W or ram[fullAdd].value;
+    resByte := W or FRAM;
     if d_ = toF then begin
-      ram[fullAdd].value := resByte;
+      FRAM := resByte;
     end else begin  //toW
       w := resByte;
     end;
     STATUS_Z := resByte <> 0;
   end;
   MOVF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
+    resByte := FRAM;
     if d_ = toF then begin
       //no mueve, solo verifica
-      STATUS_Z := (ram[fullAdd].value = 0);
+      STATUS_Z := (resByte = 0);
     end else begin  //toW
-      w := ram[fullAdd].value;  //lee mapeado, si lo está
-      STATUS_Z := (W = 0);
+      w := resByte;
+      STATUS_Z := (resByte = 0);
     end;
   end;
   MOVWF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    ram[fullAdd].value := W;   //escribe a donde esté mapeado, (si está mapeado)
-    if (fullAdd and $7F) = $02 then begin
-      //Es el PCL
-      PCH := PCLATH;
+    FRAM := W;   //escribe a donde esté mapeado, (si está mapeado)
+    if f_ = $02 then begin //Es el PCL
+      PCH := PCLATH;  //Cuando se escribe en PCL, se carga PCH con PCLATH
     end;
   end;
   NOP: begin
   end;
   RLF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resByte := ram[fullAdd].value;
+    resByte := FRAM;
     bit7 := resByte and $80; //guarda bit 7
     resByte := (resByte << 1) and $ff;  //desplaza
     //pone C en bit bajo
@@ -1247,11 +1292,10 @@ begin
     //Actualiza C
     if bit7 = 0 then STATUS_C := false
                 else STATUS_C := true;
-    ram[fullAdd].value := resByte;
+    FRAM := resByte;
   end;
   RRF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resByte := ram[fullAdd].value;
+    resByte := FRAM;
     bit0 := resByte and $01; //guarda bit 0
     resByte := resByte >> 1;  //desplaza
     //pone C en bit alto
@@ -1263,34 +1307,31 @@ begin
     //Actualiza C
     if bit0 = 0 then STATUS_C := false
                 else STATUS_C := true;
-    ram[fullAdd].value := resByte;
+    FRAM := resByte;
   end;
   SUBWF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resInt := ram[fullAdd].value - W;
+    resByte := FRAM;
+    resInt := resByte - W;
     if d_ = toF then begin
-      ram[fullAdd].value :=  resInt and $FF;
+      FRAM :=  resInt and $FF;
     end else begin  //toW
       w := resInt and $FF;
     end;
     STATUS_Z := (resInt = 0);
     if resInt < 0 then STATUS_C := false   //negativo
     else STATUS_C := true;
-    resInt := (ram[fullAdd].value and $0F) - (W and $0F);
+    resInt := (resByte and $0F) - (W and $0F);
     if resInt < 0 then STATUS_DC := false   //negativo
     else STATUS_DC := true;
   end;
   SWAPF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resNib := (ram[fullAdd].value and $0F) << 4;
-    resByte := (ram[fullAdd].value and $F0) >> 4;
-    ram[fullAdd].value := resNib or resByte;
+    resByte := FRAM;
+    FRAM := (resByte >> 4) or (resByte << 4);
   end;
   XORWF: begin
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    resByte := W xor ram[fullAdd].value;
+    resByte := W xor FRAM;
     if d_ = toF then begin
-      ram[fullAdd].value := resByte;
+      FRAM := resByte;
     end else begin  //toW
       w := resByte;
     end;
@@ -1300,18 +1341,15 @@ begin
   BCF: begin
     msk := $1 << b_;
     msk := not msk;
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    ram[fullAdd].value := ram[fullAdd].value and msk;
+    FRAM := FRAM and msk;
   end;
   BSF: begin
     msk := $1 << b_;
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    ram[fullAdd].value := ram[fullAdd].value or msk;// b_
+    FRAM := FRAM or msk;// b_
   end;
   BTFSC: begin
     msk := $1 << b_;
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    if (ram[fullAdd].value and msk) = 0 then begin
+    if (FRAM and msk) = 0 then begin
       //salta una instrucción
       if PCL = 255 then begin
         PCL := 0;
@@ -1324,8 +1362,7 @@ begin
   end;
   BTFSS: begin
     msk := $1 << b_;
-    fullAdd := (STATUS and %01100000) << 2 + f_ ;//  f_
-    if (ram[fullAdd].value and msk) <> 0 then begin
+    if (FRAM and msk) <> 0 then begin
       //salta una instrucción
       if PCL = 255 then begin
         PCL := 0;
