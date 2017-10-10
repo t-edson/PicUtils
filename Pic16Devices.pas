@@ -141,6 +141,13 @@ begin
      pic.SetStatRAMCom('000-00B:SFR, 00C-04F:GPR');
      pic.SetStatRAMCom('080-08B:SFR, 08C-0CF:GPR');
      pic.SetMappRAMCom('08C-0CF:bnk0');
+     pic.SetUnimpBITS('003:3F,083:3F,005:1F,085:1F,00A:1F,08A:1F');
+     pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('005:0-17,1-18,2-1,3-2,4-3');
+     pic.ram[$006].name := 'PORTB';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('006:0-6,1-7,2-8,3-9,4-10,5-11,6-12,7-13');
+     PIC.SetPin(5, 'VSS', pptGND);
+     PIC.SetPin(14, 'VDD', pptVcc);
    end;
    'PIC16F870': begin
      pic.MaxFreq:=20000000;
@@ -257,7 +264,25 @@ begin
      pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
    end;
    'PIC16F877',
-   'PIC16F877A',
+   'PIC16F877A': begin
+     pic.MaxFreq:=20000000;
+     pic.Npins := 40;
+     pic.NumBanks:=4;
+     pic.NumPages:=4; pic.MaxFlash:=8192;
+     pic.SetMappRAMCom('080-080:bnk0, 082-084:bnk0, 08A-08B:bnk0');
+     pic.SetMappRAMCom('100-100:bnk0, 102-104:bnk0, 10A-10B:bnk0');
+     pic.SetMappRAMCom('180-180:bnk0, 182-184:bnk0, 18A-18B:bnk0');
+     pic.SetMappRAMCom('101-101:bnk0');
+     pic.SetMappRAMCom('181-181:bnk1');
+
+     pic.SetStatRAMCom('000-01F:SFR, 020-07F:GPR');
+     pic.SetStatRAMCom('080-08E:SFR, 091-094:SFR, 098-099:SFR, 09E-09F:SFR, 0A0-0FF:GPR');
+     pic.SetStatRAMCom('100-104:SFR, 106-106:SFR, 10A-10F:SFR, 110-17F:GPR');
+     pic.SetStatRAMCom('180-184:SFR, 186-186:SFR, 18A-18F:SFR, 190-1FF:GPR');
+     pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
+     pic.SetUnimpBITS('005:3F,085:3F,009:03,089:F3,00A:1F,08A:1F,10A:1F,18A:1F');
+     //Falta completar bits con SetUnimpBITS().
+   end;
    'PIC16F887': begin
      pic.MaxFreq:=20000000;
      pic.Npins := 40;
@@ -274,6 +299,7 @@ begin
      pic.SetStatRAMCom('100-104:SFR, 106-106:SFR, 10A-10F:SFR, 110-17F:GPR');
      pic.SetStatRAMCom('180-184:SFR, 186-186:SFR, 18A-18F:SFR, 190-1FF:GPR');
      pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
+     //Falta definir bits no implementados.
    end;
    'PIC16F627A': begin
      pic.MaxFreq:=20000000;

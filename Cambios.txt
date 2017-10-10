@@ -13,6 +13,12 @@ Se implementa el método TPIC16.ExecNCycles(), y se implementa el conteo de ciclo
 de ejecución.
 Se incluyen condiciones para la detención de la ejecución.
 Se incluye el evento TPIC16.OnExecutionMsg.
+Se incluyen campos de posición, a la clase TPIC16FlashCell, para facilitar la 
+depuración. 
+Se incluye el método TPIC16.addPosInformation(), para agregar información de 
+ubicación.
+Se incluye el método TPIC16.MapPORTtoPIN() para mapear memoria RAM a pines físicos.
+Se crea el campo TPIC16RamCell.Fimplem.
 
 1.0
 ===

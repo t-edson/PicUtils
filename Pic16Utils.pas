@@ -20,10 +20,10 @@ interface
 uses
   Classes, SysUtils, LCLProc;
 const
-  PIC_MAX_RAM = 512;
-  PIC_MAX_FLASH = 8192;
+  PIC_MAX_RAM = 512;    //Máxima cantidad de memoria RAM
+  PIC_MAX_FLASH = 8192; //Máxima cantidad e memoria Flash
   PIC_PAGE_SIZE = 2048;
-
+  PIC_MAX_PINES = 64;   //Máxima cantidad de pines para el encapsulado
 type  //tipos para instrucciones
   //Instrucciones para la serie 16
   TPIC16Inst = (
@@ -91,13 +91,14 @@ type //Modelo de la memoria RAM
   private
     Fvalue  : byte;     //value of the memory
     Fused   : byte;     //Bitmap. Indicates the used bits ($00->all free; $ff->all bits used.)
+    Fimplem : byte;     //Bitmap. Indicates the implemented bits
     function Getused: byte;
     function Getvalue: byte;
     procedure Setused(AValue: byte);
     procedure Setvalue(AValue: byte);
   public
     addr   : word;     //dirección física de memoria, en donde está la celda.
-    name   : string;   //name of the record
+    name   : string;   //name of the register (or variable)
     bitname: array[0..7] of string;  //name of the bits.
     state  : TPIC16CellState;  //status of the cell
     mappedTo: TPIC16RamCellPtr;  //Indica que está mapeado a otra celda, de otra dirección
@@ -136,14 +137,18 @@ type  //Models for Flash memory
   TPIC16FlashCell = record
     value     : word;     //value of the memory
     used      : boolean;  //indicate if have been written
+    //Information of position in source code. Used for debug
+    rowSrc    : word;     //Row number
+    colSrc    : word;     //Column number
+    idFile    : SmallInt;     //Index to a file. No load the name to save space.
     {Estos campos de cadena ocupan bastante espacio, aún cuado están en NULL. Si se
-    quisiera optimizar el uso de RAM, se podría pensar en codificar, variso campos en
+    quisiera optimizar el uso de RAM, se podría pensar en codificar, varios campos en
     una sola cadena.}
     topLabel  : string;   //label on the top of the cell.
     topComment: string;   //comment on the top of the cell.
     sideComment: string;  //right comment to code
     //Campos para deputación
-    breakPnt  : boolean;  //Indica que esta celda contiene un punto de interrupción
+    breakPnt  : boolean;  //Indicates if this cell have a Breakpoint
     {tener cuidado con el tamaño de este registro, pues se va a multiplicar por 8192}
   end;
   TPIC16Flash = array[0..PIC_MAX_FLASH-1] of TPIC16FlashCell;
@@ -168,6 +173,26 @@ type  //Models for Flash memory
   end;
 
 type
+  TPICpinType = (
+    pptVcc,    //Alimentación
+    pptGND,    //Tierra
+    pptControl,//Pin de control
+    pptPort,   //Puerto Entrada/Salida
+    pptUnused  //Pin no usado
+  );
+
+  //Modela a un pin del PIC
+
+  { TPICpin }
+
+  TPICpin = object
+    nam: string;      //Eqtiueta o nombre
+    typ: TPICpinType; //Tipo de pin
+    add: word;        //Dirección en RAM
+    bit: byte;        //Bit en RAM
+    function GetLabel: string;
+  end;
+
   {Objeto que representa al hardware de un PIC de la serie 16}
   { TPIC16 }
   TPIC16 = class
@@ -213,6 +238,7 @@ type
     PCLATH   : byte;   //Contador de Programa H
     STKPTR   : 0..7;   //Puntero de pila
     STACK    : array[0..7] of word;
+    pines    : array[1..PIC_MAX_PINES] of TPICpin;
     property STATUS: byte read GetSTATUS;
     property STATUS_Z: boolean read GetSTATUS_Z write SetSTATUS_Z;
     property STATUS_C: boolean read GetSTATUS_C write SetSTATUS_C;
@@ -268,6 +294,9 @@ type
     procedure SetMappRAM(i1, i2: word; MappedTo: word);
     function SetStatRAMCom(strDef: string): boolean;
     function SetMappRAMCom(strDef: string): boolean;
+    function MapRAMtoPIN(strDef: string): boolean;
+    procedure SetPin(pNumber: integer; pLabel: string; pType: TPICpinType);
+    function SetUnimpBITS(strDef: string): boolean;
     function BankToAbsRAM(const offset, bank: byte): word; //devuelve dirección absoluta
     procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
     //funciones para manejo de nombres
@@ -294,6 +323,7 @@ type
     procedure addTopLabel(lbl: string);  //Add a comment to the ASM code
     procedure addTopComm(comm: string; replace: boolean = true);  //Add a comment to the ASM code
     procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
+    procedure addPosInformation(rowSrc, colSrc: word; idFile: byte);
     procedure GenHex(hexFile: string; ConfigWord: integer = - 1);  //genera un archivo hex
     procedure DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);  //vuelva en código que contiene
   public
@@ -309,6 +339,16 @@ var  //variables globales
 
 implementation
 
+{ TPICpin }
+function TPICpin.GetLabel: string;
+{Devuelve una etiqueta para el pin}
+begin
+  case typ of
+  pptUnused: Result := 'NC';
+  else
+    Result := nam;
+  end;
+end;
 { TPIC16RamCell }
 function TPIC16RamCell.Getused: byte;
 begin
@@ -660,6 +700,14 @@ begin
     flash[iFlash].sideComment+=comm;   //se agrega al que pudiera haber
   end;
 end;
+procedure TPIC16.addPosInformation(rowSrc, colSrc: word; idFile: byte);
+{Agrega information de la posición en el codigo fuente, a la posición actual de la
+memoria flash.}
+begin
+  flash[iFlash].rowSrc := rowSrc;
+  flash[iFlash].colSrc := colSrc;
+  flash[iFlash].idFile := idFile;
+end;
 //Creación de archivo *.hex
 function TPIC16.HexChecksum(const lin:string): string;
 //Devuelve los caracteres en hexadecimal del Checksum, para el archivo *.hex
@@ -819,11 +867,14 @@ begin
     end;
     exit;
   end;
+  {Se escribe aplicando la máscara de bits implementados. Se podría usra la máscara en
+  lectura o escritura, pero se prefiere hacerlo en escritura, porque se espera que se
+  hagan menos operaciones de escritura que lectura.}
   case STATUS and %01100000 of
-  %00000000: ram[f_     ].value := value;
-  %00100000: ram[f_+ $80].value := value;
-  %01000000: ram[f_+$100].value := value;
-  %01100000: ram[f_+$180].value := value;
+  %00000000: ram[f_     ].value := value and ram[f_     ].Fimplem;
+  %00100000: ram[f_+ $80].value := value and ram[f_+ $80].Fimplem;
+  %01000000: ram[f_+$100].value := value and ram[f_+$100].Fimplem;
+  %01100000: ram[f_+$180].value := value and ram[f_+$180].Fimplem;
   end;
 end;
 function TPIC16.GetFRAM: byte;
@@ -1292,7 +1343,11 @@ begin
     //Actualiza C
     if bit7 = 0 then STATUS_C := false
                 else STATUS_C := true;
-    FRAM := resByte;
+    if d_ = toF then begin
+      FRAM := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
   end;
   RRF: begin
     resByte := FRAM;
@@ -1307,7 +1362,11 @@ begin
     //Actualiza C
     if bit0 = 0 then STATUS_C := false
                 else STATUS_C := true;
-    FRAM := resByte;
+    if d_ = toF then begin
+      FRAM := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
   end;
   SUBWF: begin
     resByte := FRAM;
@@ -1574,7 +1633,6 @@ begin
   PCLATH := 0;
   PCH := 0;
   W := 0;
-  ram[$03].Fvalue := %00011000;  //STATUS
   STKPTR := 0;   //Posición inicial del puntero de pila
   nClck := 0;    //Inicia contador de ciclos
   CommStop := false;  //Limpia bandera
@@ -1582,6 +1640,7 @@ begin
   for i:=0 to high(ram) do begin
     ram[i].Fvalue := $00;
   end;
+  ram[$03].Fvalue := %00011000;  //STATUS
 end;
 procedure TPIC16.AddBreakopint(pc: word);
 //Agrega un punto de interrupción
@@ -1821,9 +1880,14 @@ var
   i: word;
 begin
   for i:=0 to high(ram) do begin
-    ram[i].addr := i;
-    ram[i].state := cs_unimplem;
+    ram[i].addr     := i;
+    ram[i].state    := cs_unimplem;
     ram[i].mappedTo := nil;
+    ram[i].Fimplem  := $FF;  //Todos implementados, por defecto
+  end;
+  //Inicia estado de pines
+  for i:=1 to high(pines) do begin
+    pines[i].typ := pptUnused;
   end;
 end;
 procedure TPIC16.SetStatRAM(i1, i2: word; status0: TPIC16CellState);
@@ -1978,7 +2042,133 @@ begin
     coms.Destroy;
   end;
 end;
-
+function TPIC16.MapRAMtoPIN(strDef: string): boolean;
+{Mapea puertos de memoria RAM a pines físicos del dispositivo. Útil para la simulación
+La cadena de definición, tiene el formato:
+<dirección>:<comando 1>, <comando 2>, ...
+Cada comando, tiene el formato:
+<dirIni>-<dirFin>:<banco al que está mapeado>
+Un ejemplo de cadena de definición, es:
+   '005:0-17,1-18,2-1,3-2,4-3'
+Si hay error, devuelve FALSE, y el mensaje de error en MsjError.
+}
+var
+  coms: TStringList;
+  add1, pin, bit: longint;
+  com, str, ramName: String;
+  pSep: SizeInt;
+begin
+  Result := true;
+  //Obtiene dirección
+  if length(strDef) < 4 then begin
+    MsjError := 'Syntax error';
+    exit(false);
+  end;
+  if strDef[4] <> ':' then begin
+    MsjError := 'Expected "<3-digits address>"';
+    exit(false);
+  end;
+  if not TryStrToInt('$'+copy(strDef,1,3), add1) then begin
+    MsjError := 'Address format error.';
+    exit(false);
+  end;
+  delete(strDef, 1, 4);  //quita la dirección
+  //Obtiene lista de asociaciones
+  coms:= TStringList.Create;
+  try
+    coms.Delimiter := ',';
+    coms.DelimitedText := strDef;
+    for str in coms do begin
+      com := UpCase(trim(str));  //asociación
+      if com='' then continue;
+      pSep := pos('-',com);   //Posición de separador
+      if pSep = 0 then begin
+        MsjError := 'Expected "-".';
+        exit(false);
+      end;
+      //Debe tener el formato pedido
+//      debugln(com);
+      if not TryStrToInt(copy(com,1,pSep-1), bit) then begin
+        MsjError := 'Error in bit number.';
+        exit(false);
+      end;
+      if not TryStrToInt(copy(com,pSep+1,length(com)), pin) then begin
+        MsjError := 'Error in pin number.';
+        exit(false);
+      end;
+      if (pin<0) or (pin>PIC_MAX_PINES) then begin
+        MsjError := 'Pin number out of range.';
+        exit(false);
+      end;
+      if pin>Npins then begin
+        MsjError := 'Pin number out of range, for this device.';
+        exit(false);
+      end;
+      //Ya se tiene el BIT y el PIN. Configura datos del PIN
+      pines[pin].add := add1;
+      pines[pin].bit := bit;
+      pines[pin].typ := pptPort;
+      ramName := ram[add1].name;
+      if ramName='' then ramName := 'PORT';
+      pines[pin].nam :=  ramName + '.' + IntToStr(bit);  //Nombre pro defecto
+    end;
+  finally
+    coms.Destroy;
+  end;
+end;
+procedure TPIC16.SetPin(pNumber: integer; pLabel: string; pType: TPICpinType);
+begin
+  if pNumber>PIC_MAX_PINES then exit;
+  pines[pNumber].nam := pLabel;
+  pines[pNumber].typ := pType;
+end;
+function TPIC16.SetUnimpBITS(strDef: string): boolean;
+{Fija bits no implementados en posciones de memoria RAM.}
+var
+  coms: TStringList;
+  add1, n: longint;
+  mskBits, com, str: String;
+  mskBitsN: byte;
+begin
+  Result := true;
+  coms:= TStringList.Create;
+  try
+    coms.Delimiter := ',';
+    coms.DelimitedText := strDef;
+    for str in coms do begin
+      com := UpCase(trim(str));
+      if com='' then continue;
+      if length(com)<>6 then begin
+        MsjError := 'Syntax error: Expected "$$$:$$".';
+        exit(false);
+      end;
+      if com[4] <> ':' then begin
+        MsjError := 'Syntax error: Expected ":".';
+        exit(false);
+      end;
+      //Debe tener el formato pedido
+//      debugln(com);
+      if not TryStrToInt('$'+copy(com,1,3), add1) then begin
+        MsjError := 'Syntax error: Wrong address.';
+        exit(false);
+      end;
+      if add1>high(ram) then begin
+        MsjError := 'Syntax error: Wrong address.';
+        exit(false);
+      end;
+      mskBits := copy(com, 5, 2);
+      if not TryStrToInt('$'+mskBits, n) then begin
+        MsjError := 'Syntax error: Wrong mask.';
+        exit(false);
+      end;
+      mskBitsN := n;  //Se supone que nunca será > 255
+      //Ya se tienen los parámetros, para definir el mapeo
+      ram[add1].Fimplem := mskBitsN;
+    end;
+  finally
+    coms.Destroy;
+  end;
+end;
 function TPIC16.BankToAbsRAM(const offset, bank: byte): word;
 {Convierte una dirección y banco a una dirección absoluta}
 begin
@@ -2049,6 +2239,7 @@ begin
     flash[i].topLabel   := '';
     flash[i].sideComment:= '';
     flash[i].topComment := '';
+    flash[i].idFile := -1;  //Indica no inicializado
   end;
 end;
 procedure TPIC16.GenHex(hexFile: string; ConfigWord: integer = -1);
@@ -2170,11 +2361,13 @@ begin
       lOut.Add(comLin);
     end;
     //Escribe línea
-    lin := Disassembler(incVarNam);
-    if incAdrr then  begin //Incluye dirección física
+    lin := Disassembler(incVarNam);  //Instrucción
+    //Verificas si incluye dirección física
+    if incAdrr then  begin
       lin := '0x'+IntToHex(i,3) + ' ' + lin;
     end;
-    if incCom then begin  //Incluye comentario lateral
+    //Verifica si incluye comentario lateral
+    if incCom then begin
       lin := lin  + ' ' + comLat;
     end;
     lOut.Add('    ' + lin);
