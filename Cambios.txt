@@ -19,6 +19,7 @@ Se incluye el método TPIC16.addPosInformation(), para agregar información de
 ubicación.
 Se incluye el método TPIC16.MapPORTtoPIN() para mapear memoria RAM a pines físicos.
 Se crea el campo TPIC16RamCell.Fimplem.
+Se corrige un error en la ejecución de las instrucciones RLF y RRF.
 
 1.0
 ===
