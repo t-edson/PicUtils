@@ -20,6 +20,7 @@ ubicación.
 Se incluye el método TPIC16.MapPORTtoPIN() para mapear memoria RAM a pines físicos.
 Se crea el campo TPIC16RamCell.Fimplem.
 Se corrige un error en la ejecución de las instrucciones RLF y RRF.
+Se define información detallada de hardware para los PIC16F84/84A y PIC16F877/877A.
 
 1.0
 ===

@@ -124,23 +124,32 @@ begin
    'PIC16F84',
    'PIC16CR84': begin
      pic.MaxFreq:=10000000;
-     pic.Npins := 18;
      pic.NumBanks:=2;
      pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
      pic.SetMappRAMCom('080-080:bnk0, 082-084:bnk0, 08A-08B:bnk0');
-     pic.SetStatRAMCom('000-00B:SFR, 00C-04F:GPR');
-     pic.SetStatRAMCom('080-08B:SFR, 08C-0CF:GPR');
+     pic.SetStatRAMCom('000-006:SFR, 008-00B:SFR, 00C-04F:GPR');
+     pic.SetStatRAMCom('080-086:SFR, 088-08B:SFR, 08C-0CF:GPR');
      pic.SetMappRAMCom('08C-0CF:bnk0');
+     //Hardware definition
+     pic.Npins := 18;
+     pic.SetUnimpBITS('003:FF,083:3F,005:1F,085:1F,00A:1F,08A:1F');
+     pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('005:0-17,1-18,2-1,3-2,4-3');
+     pic.ram[$006].name := 'PORTB';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('006:0-6,1-7,2-8,3-9,4-10,5-11,6-12,7-13');
+     PIC.SetPin(5, 'VSS', pptGND);
+     PIC.SetPin(14, 'VDD', pptVcc);
    end;
    'PIC16F84A': begin
      pic.MaxFreq:=20000000;
-     pic.Npins := 18;
      pic.NumBanks:=2;    //los bancos 2 y 3 están reflejados
      pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
      pic.SetMappRAMCom('080-080:bnk0, 082-084:bnk0, 08A-08B:bnk0');
-     pic.SetStatRAMCom('000-00B:SFR, 00C-04F:GPR');
-     pic.SetStatRAMCom('080-08B:SFR, 08C-0CF:GPR');
+     pic.SetStatRAMCom('000-006:SFR, 008-00B:SFR, 00C-04F:GPR');
+     pic.SetStatRAMCom('080-086:SFR, 088-08B:SFR, 08C-0CF:GPR');
      pic.SetMappRAMCom('08C-0CF:bnk0');
+     //Hardware definition
+     pic.Npins := 18;
      pic.SetUnimpBITS('003:3F,083:3F,005:1F,085:1F,00A:1F,08A:1F');
      pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
      pic.MapRAMtoPIN('005:0-17,1-18,2-1,3-2,4-3');
@@ -266,7 +275,6 @@ begin
    'PIC16F877',
    'PIC16F877A': begin
      pic.MaxFreq:=20000000;
-     pic.Npins := 40;
      pic.NumBanks:=4;
      pic.NumPages:=4; pic.MaxFlash:=8192;
      pic.SetMappRAMCom('080-080:bnk0, 082-084:bnk0, 08A-08B:bnk0');
@@ -276,12 +284,35 @@ begin
      pic.SetMappRAMCom('181-181:bnk1');
 
      pic.SetStatRAMCom('000-01F:SFR, 020-07F:GPR');
-     pic.SetStatRAMCom('080-08E:SFR, 091-094:SFR, 098-099:SFR, 09E-09F:SFR, 0A0-0FF:GPR');
+     if Upcase(model) = 'PIC16F877' then
+       pic.SetStatRAMCom('080-08E:SFR, 091-094:SFR, 098-099:SFR, 09E-09F:SFR, 0A0-0FF:GPR')
+     else
+       pic.SetStatRAMCom('080-08E:SFR, 091-094:SFR, 098-099:SFR, 09C-09F:SFR, 0A0-0FF:GPR');
      pic.SetStatRAMCom('100-104:SFR, 106-106:SFR, 10A-10F:SFR, 110-17F:GPR');
      pic.SetStatRAMCom('180-184:SFR, 186-186:SFR, 18A-18F:SFR, 190-1FF:GPR');
      pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
-     pic.SetUnimpBITS('005:3F,085:3F,009:03,089:F3,00A:1F,08A:1F,10A:1F,18A:1F');
-     //Falta completar bits con SetUnimpBITS().
+     //Hardware definition
+     pic.Npins := 40;
+     pic.SetUnimpBITS('005:3F,009:03,00A:1F,00D:59,010:3F,012:7F,017:3F,01D:3F');
+     if Upcase(model) = 'PIC16F877' then
+       pic.SetUnimpBITS('085:3F,089:F7,08A:1F,08D:59,08E:03,09F:8F')
+     else
+       pic.SetUnimpBITS('085:3F,089:F7,08A:1F,08D:59,08E:03,09D:EF,09F:CF');
+     PIC.SetUnimpBITS('10A:1F,10E:3F,10F:1F,18A:1F,18C:8F');
+     pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('005:0-2,1-3,2-4,3-5,4-6,5-7');
+     pic.ram[$006].name := 'PORTB';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('006:0-33,1-34,2-35,3-36,4-37,5-38,6-39,7-40');
+     pic.ram[$007].name := 'PORTC';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('007:0-15,1-16,2-17,3-18,4-23,5-24,6-25,7-26');
+     pic.ram[$008].name := 'PORTD';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('008:0-19,1-20,2-21,3-22,4-27,5-28,6-29,7-30');
+     pic.ram[$009].name := 'PORTE';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('009:0-8,1-9,2-10');
+     PIC.SetPin(12, 'VSS', pptGND);
+     PIC.SetPin(31, 'VSS', pptGND);
+     PIC.SetPin(11, 'VDD', pptVcc);
+     PIC.SetPin(12, 'VDD', pptVcc);
    end;
    'PIC16F887': begin
      pic.MaxFreq:=20000000;
