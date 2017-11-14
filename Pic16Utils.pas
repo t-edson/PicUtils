@@ -98,8 +98,9 @@ type //Modelo de la memoria RAM
     procedure Setvalue(AValue: byte);
   public
     addr   : word;     //dirección física de memoria, en donde está la celda.
-    name   : string;   //name of the register (or variable)
-    bitname: array[0..7] of string;  //name of the bits.
+    name   : string;   //Name of the register (or variable)
+    bitname: array[0..7] of string;  //Name of the bits.
+    shared : byte;     //Used to share this register
     state  : TPIC16CellState;  //status of the cell
     mappedTo: TPIC16RamCellPtr;  //Indica que está mapeado a otra celda, de otra dirección
     property value: byte read Getvalue write Setvalue;
@@ -281,8 +282,8 @@ type
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
                          implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
     //funciones para la memoria RAM
-    function GetFreeBit(var offs, bnk, bit: byte): boolean;
-    function GetFreeByte(out offs, bnk: byte): boolean;
+    function GetFreeBit(var offs, bnk, bit: byte; shared: boolean): boolean;
+    function GetFreeByte(out offs, bnk: byte; shared: boolean): boolean;
     function GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;  //obtiene una dirección libre
     function TotalMemRAM: word; //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
@@ -308,6 +309,8 @@ type
     //funciones para la memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
     procedure ClearMemFlash;
+    procedure SetSharedUnused;
+    procedure SetSharedUsed;
     //Métodos para codificar instrucciones de acuerdo a la sintaxis
     procedure useFlash;
     procedure codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
@@ -1656,9 +1659,11 @@ begin
 end;
 
 //Funciones para la memoria RAM
-function TPIC16.GetFreeBit(var offs, bnk, bit: byte): boolean;
-{Devuelve una dirección libre de la memoria RAM (y el banco). Si encuentra espacio,
- devuelve TRUE.}
+function TPIC16.GetFreeBit(var offs, bnk, bit: byte; shared: boolean): boolean;
+{Devuelve una dirección libre de la memoria RAM (y el banco).
+"Shared" indica que se marcará el bit como de tipo "Compartido", y se usa para el
+caso en que se quiera comaprtir la misma posición para diversos variables.
+Si encuentra espacio, devuelve TRUE.}
 var
   maxRam: word;
   i: Integer;
@@ -1666,11 +1671,12 @@ begin
   Result := false;   //valor inicial
 
   maxRam := NumBanks * $80;  //posición máxima
-  //realement debería explorar solo hasta la dirección impleemntada
+  //Realmente debería explorar solo hasta la dirección implementada, por eficiencia
   for i:=0 to maxRam-1 do begin
     if (ram[i].state = cs_impleGPR) and (ram[i].used <> 255) then begin
       //Esta dirección tiene al menos un bit libre
-      offs := i;  //devuelve dirección
+      offs := i and $7F;  //devuelve dirección
+      bnk := i >> 7;
       //busca el bit libre
       if          (ram[i].used and %00000001) = 0 then begin
         bit:=0;
@@ -1690,72 +1696,42 @@ begin
         bit:=7
       end;
       ram[i].used := ram[i].used or (byte(1)<<bit); //marca bit usado
+      if shared then begin
+        ram[i].shared:= ram[i].shared or (byte(1)<<bit); //marca bit compartido
+      end;
       //Notar que la posición de memoria puede estar mapeada a otro banco.
       Result := true;  //indica que encontró espacio
       exit;
     end;
   end;
 end;
-function TPIC16.GetFreeByte(out offs, bnk: byte): boolean;
-{Devuelve una dirección libre de la memoria flash (y el banco). Si encuentra espacio,
- devuelve TRUE.}
+function TPIC16.GetFreeByte(out offs, bnk: byte; shared: boolean): boolean;
+{Devuelve una dirección libre de la memoria flash (y el banco).
+"Shared" indica que se marcará el bit como de tipo "Compartido", y se usa para el
+caso en que se quiera comaprtir la misma posición para diversos variables.
+Si encuentra espacio, devuelve TRUE.}
+var
+  i: Integer;
+  maxRam: word;
 begin
   Result := false;   //valor inicial
-  if NumBanks = 1 then begin
-    //solo 1 banco
-    if bank0.GetFreeByte(offs) then begin
-      bnk := 0;      //encontró en este banco
-      Result := true;
-      exit;
-    end;
-  end else if NumBanks = 2 then begin
-    //solo 2 bancos
-    if bank0.GetFreeByte(offs) then begin
-      bnk := 0;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank1.GetFreeByte(offs) then begin
-      bnk := 1;      //encontró en este banco
-      Result := true;
-      exit;
-    end;
-  end else if NumBanks = 3 then begin
-    //3 bancos
-    if bank0.GetFreeByte(offs) then begin
-      bnk := 0;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank1.GetFreeByte(offs) then begin
-      bnk := 1;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank2.GetFreeByte(offs) then begin
-      bnk := 2;      //encontró en este banco
-      Result := true;
-      exit;
-    end;
-  end else begin
-    //se asume 4 bancos
-    if bank0.GetFreeByte(offs) then begin
-      bnk := 0;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank1.GetFreeByte(offs) then begin
-      bnk := 1;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank2.GetFreeByte(offs) then begin
-      bnk := 2;      //encontró en este banco
-      Result := true;
-      exit;
-    end else if bank3.GetFreeByte(offs) then begin
-      bnk := 3;      //encontró en este banco
-      Result := true;
+  maxRam := NumBanks * $80;  //posición máxima
+  //Realmente debería explorar solo hasta la dirección implementada, por eficiencia
+  for i:=0 to maxRam-1 do begin
+    if (ram[i].state = cs_impleGPR) and (ram[i].used = 0) then begin
+      //Esta dirección está libre
+      ram[i].used:=255;   //marca como usado
+      if shared then begin
+        ram[i].shared := 255;  //Marca como compartido
+      end;
+      offs := i and $7F;  //devuelve dirección
+      bnk := i >> 7;
+      //Notar que la posición de memoria puede estar mapeada a otro banco.
+      Result := true;  //indica que encontró espacio
       exit;
     end;
   end;
-  {si llegó aquí es porque no encontró la memoria solicitada,
-  al menos de ese tamaño}
+
 end;
 function TPIC16.GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;
 {Devuelve una dirección libre de la memoria flash (y el banco) para ubicar un bloque
@@ -1862,6 +1838,7 @@ begin
     ram[i].Fvalue := $00;
     ram[i].used := 0;
     ram[i].name:='';
+    ram[i].shared := 0;
 //    ram[i].state := cs_unimplem;  //por defecto se considera no implementado
     ram[i].bitname[0] := '';
     ram[i].bitname[1] := '';
@@ -1871,6 +1848,36 @@ begin
     ram[i].bitname[5] := '';
     ram[i].bitname[6] := '';
     ram[i].bitname[7] := '';
+  end;
+end;
+procedure TPIC16.SetSharedUnused;
+{Marca las posiciones que estén en "shared", como no usadas, para que se puedan
+usar nuevamente.}
+var
+  i: Integer;
+  amask: Byte;
+begin
+  for i:=0 to high(ram) do begin
+    if (ram[i].state = cs_impleGPR) and (ram[i].shared <> 0) then begin
+//debugln('    >> used $'+IntToHEx(i,3)+':'+ram[i].name);
+      amask := not ram[i].shared;   //máscara invertida
+      ram[i].used := ram[i].used and amask;  //pone en cero los bits shared
+    end;
+  end;
+end;
+procedure TPIC16.SetSharedUsed;
+{Marca las posiciones que estén en "shared", como usadas, para que no se puedan
+usar nuevamente.}
+var
+  i: Integer;
+  amask: Byte;
+begin
+  for i:=0 to high(ram) do begin
+    if (ram[i].state = cs_impleGPR) and (ram[i].shared <> 0) then begin
+//debugln('    >> used $'+IntToHEx(i,3)+':'+ram[i].name);
+      amask := ram[i].shared;   //máscara
+      ram[i].used := ram[i].used or amask;  //pone en uno los bits shared
+    end;
   end;
 end;
 procedure TPIC16.DisableAllRAM;

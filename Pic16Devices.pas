@@ -55,14 +55,22 @@ begin
    pic.Model := model;
    case Upcase(model) of
    'DEFAULT': begin   //Configuración por defecto. Se toma la del PIC16F84
-     pic.MaxFreq:=10000000;
-     pic.Npins := 18;
+     pic.MaxFreq:=20000000;  //Pero a 20MHz
      pic.NumBanks:=2;
      pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
      pic.SetMappRAMCom('080-080:bnk0, 082-084:bnk0, 08A-08B:bnk0');
      pic.SetStatRAMCom('000-00B:SFR, 00C-04F:GPR');
      pic.SetStatRAMCom('080-08B:SFR, 08C-0CF:GPR');
      pic.SetMappRAMCom('08C-0CF:bnk0');
+     //Hardware definition
+     pic.Npins := 18;
+     pic.SetUnimpBITS('003:3F,083:3F,005:1F,085:1F,00A:1F,08A:1F');
+     pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('005:0-17,1-18,2-1,3-2,4-3');
+     pic.ram[$006].name := 'PORTB';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('006:0-6,1-7,2-8,3-9,4-10,5-11,6-12,7-13');
+     PIC.SetPin(5, 'VSS', pptGND);
+     PIC.SetPin(14, 'VDD', pptVcc);
      end;
    'PIC12F629',
    'PIC12F675': begin
