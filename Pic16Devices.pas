@@ -15,6 +15,8 @@ procedure GetSupportedDevices(list: TStrings);
 begin
    list.Add('PIC12F629');
    list.Add('PIC12F675');
+   list.Add('PIC12F629A');
+   list.Add('PIC12F675A');
 
    list.Add('PIC16C63');
    list.Add('PIC16CR63');
@@ -28,6 +30,7 @@ begin
    list.Add('PIC16F84');
    list.Add('PIC16CR84');
    list.Add('PIC16F84A');
+
    list.Add('PIC16F870');
    list.Add('PIC16F871');
    list.Add('PIC16F872');
