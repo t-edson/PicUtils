@@ -73,7 +73,9 @@ begin
      PIC.SetPin(14, 'VDD', pptVcc);
      end;
    'PIC12F629',
-   'PIC12F675': begin
+   'PIC12F675',
+   'PIC12F629A',
+   'PIC12F675A' : begin
      pic.MaxFreq:=20000000;
      pic.Npins := 8;
      pic.NumBanks:=2;
@@ -82,6 +84,10 @@ begin
      pic.SetStatRAMCom('000-005:SFR, 00A-00C:SFR, 00E-010:SFR, 019-01F:SFR, 020-05F:GPR');
      pic.SetStatRAMCom('080-085:SFR, 08A-08C:SFR, 08E-090:SFR, 095-09F:SFR, 0A0-0DF:GPR');
      pic.SetMappRAMCom('0A0-0DF:bnk0');
+     pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('005:0-7,1-6,2-5,3-4,4-3,5-2');
+     PIC.SetPin(8, 'VSS', pptGND);
+     PIC.SetPin(1, 'VDD', pptVcc);
    end;
    'PIC16C63',
    'PIC16CR63':begin
