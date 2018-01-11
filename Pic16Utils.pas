@@ -105,6 +105,7 @@ type //Modelo de la memoria RAM
     mappedTo: TPIC16RamCellPtr;  //Indica que está mapeado a otra celda, de otra dirección
     property value: byte read Getvalue write Setvalue;
     property used: byte read Getused write Setused;
+    function AvailGPR: boolean;
   end;
   TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPIC16RamCell;
   PIC16RamPtr = ^TPIC16Ram;
@@ -118,20 +119,8 @@ type //Modelo de la memoria RAM
     numBank   : integer;       //Número de banco
     ramPtr    : PIC16RamPtr;  //Puntero a memoria RAM
     AddrStart : word;          //dirección de inicio en la memoria RAM total
-  private
-    function AvailBit(const i: byte): boolean;
-    function AvailByte(const i: byte): boolean;
-    function UsedByte(const i: byte): boolean;
   public
     procedure Init(num: byte; AddrStart0: word; ram0: PIC16RamPtr);  //inicia objeto
-//    property mem[i : byte] : TPIC16RamCellPtr read Getmem;
-    //Funciones para administración de la memoria ramPtr
-    function HaveConsecGPR(const i, n: byte): boolean; //Indica si hay "n" bytes libres
-    procedure UseConsecGPR(const i, n: byte);  //Ocupa "n" bytes en la posición "i"
-    function GetFreeByte(out offs: byte): boolean;     //obtiene una dirección libre
-    function GetFreeBytes(const size: integer; var offs: byte): boolean;  //obtiene una dirección libre
-    procedure ExploreUsed(rutExplorRAM: TRutExplorRAM);  //Explora uno a uno los bytes usados
-    function TotalGPR: byte; //total de bytes que contiene para el usuario
   end;
 
 type  //Models for Flash memory
@@ -281,7 +270,9 @@ type
     property pages[i : Longint]: TFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
                          implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
-    //funciones para la memoria RAM
+    //Funciones para la memoria RAM
+    function HaveConsecGPR(const i, n: word; maxRam: word): boolean; //Indica si hay "n" bytes libres
+    procedure UseConsecGPR(const i, n: word);  //Ocupa "n" bytes en la posición "i"
     function GetFreeBit(var offs, bnk, bit: byte; shared: boolean): boolean;
     function GetFreeByte(out offs, bnk: byte; shared: boolean): boolean;
     function GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;  //obtiene una dirección libre
@@ -393,7 +384,11 @@ begin
     mappedTo^.Fvalue:= AValue;
   end;
 end;
-
+function TPIC16RamCell.AvailGPR: boolean;
+{Indica si el registro es una dirección disponible en la memoria RAM.}
+begin
+  Result := (state = cs_impleGPR) and (mappedTo = nil);
+end;
 { TRAMBank }
 //procedure TRAMBank.Setmem(i: byte; AValue: TPIC16RamCellPtr);
 ////Escribe en un banco de memoria
@@ -413,109 +408,6 @@ begin
   AddrStart :=AddrStart0;
   ramPtr       :=ram0;
 end;
-function TRAMBank.AvailBit(const i: byte): boolean; inline;
-{Indica si hay al menos un bit disponible, en la posición de memoria indicada}
-begin
-  Result := (ramPtr^[i+AddrStart].state = cs_impleGPR) and
-            (ramPtr^[i+AddrStart].used <> 255);
-end;
-function TRAMBank.AvailByte(const i: byte): boolean; inline;
-{Indica si hay un byte disponible en la posición de memoria indicada}
-begin
-  Result := (ramPtr^[i+AddrStart].state = cs_impleGPR) and
-            (ramPtr^[i+AddrStart].used = 0);
-end;
-function TRAMBank.UsedByte(const i: byte): boolean; inline;
-{Indica si se usa al menos un bit, del byte en la posición de memoria indicada.}
-begin
-  Result := (ramPtr^[i+AddrStart].state = cs_impleGPR) and
-            (ramPtr^[i+AddrStart].used <> 0);
-end;
-function TRAMBank.HaveConsecGPR(const i, n: byte): boolean;
-{Indica si hay "n" bytes consecutivos libres en la posicióm "i", en este banco de la RAM}
-var
-  c: Integer;
-  j: Byte;
-begin
-  Result := false;
-  c := 0;
-  j := i;
-  while (j<=$7F) and (c<n) do begin
-    if not AvailByte(i) then exit;  //no se puede usar
-    inc(c);      //verifica siguiente
-    inc(j);
-  end;
-  if j>$7F then exit;  //no hay más espacio
-  //si llega aquí es porque estaban libres los bloques
-  Result := true;
-end;
-procedure TRAMBank.UseConsecGPR(const i, n: byte);
-{Marca "n" bytes como usados en la posición de memoria "i", en este banco.
- Debe haberse verificado previamente que los parámetros son válidos, porque asuí no
- se hará ninguan verificación.}
-var j: byte;
-begin
-  for j:=i to byte(i+n)-1 do begin
-    ramPtr^[j+AddrStart].used:=255;  //todos los bits
-    //    mem[j].used := true;   //no se puede
-  end;
-end;
-function TRAMBank.GetFreeByte(out offs: byte): boolean;
-{Busca un byte de memoria RAM libre, en este banco. }
-var
-  i: byte;
-begin
-  Result := false;  //valor por defecto
-  for i:=0 to $7F do begin  //verifica 1 a 1, por seguridad
-    if AvailByte(i)  then begin
-      //encontró
-//      mem[i].used:=true;  //marca como usado
-      ramPtr^[i+AddrStart].used:=255;   //marca como usado
-      offs := i;  //devuelve dirección
-      Result := true;  //indica que encontró espacio
-      exit;
-    end;
-  end;
-end;
-function TRAMBank.GetFreeBytes(const size: integer; var offs: byte): boolean;
-{Busca un bloque de bytes consecutivs de memoria RAM en este banco. }
-var
-  i: byte;
-begin
-  Result := false;  //valor por defecto
-  if size=0 then exit;
-  for i:=0 to $7F do begin  //verifica 1 a 1, por seguridad
-    if HaveConsecGPR(i, size) then begin
-      //encontró del tamaño buscado
-      UseConsecGPR(i, size);  //marca como usado
-      offs := i;  //devuelve dirección
-      Result := true;  //indica que encontró espacio
-      exit;
-    end;
-  end;
-end;
-procedure TRAMBank.ExploreUsed(rutExplorRAM: TRutExplorRAM);
-{Realiza una exploración de la memoria RAM usada y llama a rutExplorRAM(), para cada
-byte encontrado.}
-var
-  i: Byte;
-begin
-  for i:=0 to $7F do begin  //verifica 1 a 1, por seguridad
-    if UsedByte(i) then rutExplorRAM(i, 0, @ramPtr^[i+AddrStart]);
-  end;
-end;
-function TRAMBank.TotalGPR: byte;
-{Total de memoria disponible para el usuario}
-var
-  i: Byte;
-begin
-  Result := 0;
-  for i:=0 to $7F do begin  //verifica 1 a 1, por seguridad
-    if ramPtr^[i+AddrStart].state = cs_impleGPR then
-      inc(Result);
-  end;
-end;
-
 { TFlashPage }
 function TFlashPage.Getmem(i: word): TPIC16FlashCell;
 begin
@@ -1657,8 +1549,36 @@ begin
   if pc>=PIC_MAX_FLASH then exit;
   flash[pc].breakPnt := not flash[pc].breakPnt;
 end;
-
 //Funciones para la memoria RAM
+function TPIC16.HaveConsecGPR(const i, n: word; maxRam: word): boolean;
+{Indica si hay "n" bytes consecutivos libres en la posicióm "i", en RAM.
+La búsqueda se hace solo hasta la posición "maxRam"}
+var
+  c: Integer;
+  j: word;
+begin
+  Result := false;
+  c := 0;
+  j := i;
+  while (j<=maxRam) and (c<n) do begin
+    if (ram[j].state <> cs_impleGPR) or (ram[j].used <> 0) then exit;
+    inc(c);      //verifica siguiente
+    inc(j);
+  end;
+  if j>maxRam then exit;  //no hay más espacio
+  //Si llega aquí es porque estaban libres los bloques
+  Result := true;
+end;
+procedure TPIC16.UseConsecGPR(const i, n: word);
+{Marca "n" bytes como usados en la posición de memoria "i", en la RAM.
+ Debe haberse verificado previamente que los parámetros son válidos, porque aquí no
+ se hará ninguna verificación.}
+var j: word;
+begin
+  for j:=i to i+n-1 do begin
+    ram[j].used:=255;  //todos los bits
+  end;
+end;
 function TPIC16.GetFreeBit(var offs, bnk, bit: byte; shared: boolean): boolean;
 {Devuelve una dirección libre de la memoria RAM (y el banco).
 "Shared" indica que se marcará el bit como de tipo "Compartido", y se usa para el
@@ -1669,7 +1589,6 @@ var
   i: Integer;
 begin
   Result := false;   //valor inicial
-
   maxRam := NumBanks * $80;  //posición máxima
   //Realmente debería explorar solo hasta la dirección implementada, por eficiencia
   for i:=0 to maxRam-1 do begin
@@ -1731,47 +1650,39 @@ begin
       exit;
     end;
   end;
-
 end;
 function TPIC16.GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;
 {Devuelve una dirección libre de la memoria flash (y el banco) para ubicar un bloque
  del tamaño indicado. Si encuentra espacio, devuelve TRUE.
  El tamaño se da en bytes, pero si el valor es negativo, se entiende que es en bits.}
+var
+  i: word;
+  maxRam: Word;
 begin
-  //Busca en lso 4 bancos
-  if (NumBanks>0) and bank0.GetFreeBytes(size, offs) then begin
-    bnk := 0;      //encontró en este banco
-    Result := true;
-    exit;
+  Result := false;  //valor por defecto
+  if size=0 then exit;
+  maxRam := word(NumBanks * $80) - 1;
+  for i:=0 to maxRam do begin  //verifica 1 a 1, por seguridad
+    if HaveConsecGPR(i, size, maxRam) then begin
+      //encontró del tamaño buscado
+      UseConsecGPR(i, size);  //marca como usado
+      offs := i and $7F;
+      bnk  := i >> 7;
+      Result := true;  //indica que encontró espacio
+      exit;
+    end;
   end;
-  if (NumBanks>1) and bank1.GetFreeBytes(size, offs) then begin
-    bnk := 1;      //encontró en este banco
-    Result := true;
-    exit;
-  end;
-  if (NumBanks>2) and bank2.GetFreeBytes(size, offs) then begin
-    bnk := 2;      //encontró en este banco
-    Result := true;
-    exit;
-  end;
-  if (NumBanks>3) and bank3.GetFreeBytes(size, offs) then begin
-    bnk := 3;      //encontró en este banco
-    Result := true;
-    exit;
-  end;
-  Result := false;   //valor inicial
-  {si llegó aquí es porque no encontró la memoria solicitada,
-  al menos de ese tamaño, o no hay bancos.}
 end;
 function TPIC16.TotalMemRAM: word;
 {Devuelve el total de memoria RAM disponible}
+var
+  i: Integer;
 begin
   Result := 0;
-  case NumBanks of
-  1: Result := bank0.TotalGPR;
-  2: Result := bank0.TotalGPR + bank1.TotalGPR;
-  3: Result := bank0.TotalGPR + bank1.TotalGPR + bank2.TotalGPR;
-  4: Result := bank0.TotalGPR + bank1.TotalGPR + bank2.TotalGPR + bank3.TotalGPR;
+  for i := 0 to word(NumBanks * $80) - 1 do begin
+    if ram[i].AvailGPR then begin
+      Result := Result + 1;
+    end;
   end;
 end;
 function TPIC16.UsedMemRAM: word;
@@ -1781,32 +1692,20 @@ var
 begin
   Result := 0;
   for i := 0 to word(NumBanks * $80) - 1 do begin
-    if (ram[i].state = cs_impleGPR) and (ram[i].used <> 0) and (ram[i].mappedTo = nil) then begin
+    if ram[i].AvailGPR and (ram[i].used <> 0) then begin
+      //Notar que "AvailGPR" asegura que no se consideran registros maepados
       Result := Result + 1;
     end;
   end;
 end;
 procedure TPIC16.ExploreUsed(rutExplorRAM: TRutExplorRAM);
 {Genera un reporte de uso de RAM}
+var
+  i: Integer;
 begin
-  case NumBanks of
-  1: begin
-      bank0.ExploreUsed(rutExplorRAM);
-     end;
-  2: begin
-      bank0.ExploreUsed(rutExplorRAM);
-      bank1.ExploreUsed(rutExplorRAM);
-    end;
-  3: begin
-      bank0.ExploreUsed(rutExplorRAM);
-      bank1.ExploreUsed(rutExplorRAM);
-      bank2.ExploreUsed(rutExplorRAM);
-    end;
-  4: begin
-      bank0.ExploreUsed(rutExplorRAM);
-      bank1.ExploreUsed(rutExplorRAM);
-      bank2.ExploreUsed(rutExplorRAM);
-      bank3.ExploreUsed(rutExplorRAM);
+  for i := 0 to word(NumBanks * $80) - 1 do begin
+    if ram[i].AvailGPR and (ram[i].used <> 0) then begin
+      rutExplorRAM(i, 0, @ram[i]);
     end;
   end;
 end;

@@ -1,3 +1,14 @@
+1.2
+===
+Se elimina el método TRAMBank.GetFreeBytes() y se modifica TPIC16.GetFreeBytes()
+para que trabaje directamente sin llamar a TRAMBank.GetFreeBytes().
+Se elimina TRAMBank.TotalGPR() y se modifica TPIC16.TotalMemRAM() para que haga
+el cálculo directamente y se aprovecha también para corregir el cálculo.
+Se elimina TRAMBank.GetFreeByte().
+Se elimina TRAMBank.ExploreUsed() y se modifica TPIC16.ExploreUsed() para trabajar
+directamente sin llamar a TRAMBank.ExploreUsed().
+Se elimina TRAMBank.AvailBit().
+
 1.1
 ===
 Se modifica TPIC16.GenHex(), para que incluya dentro de sí, las funcionalidades de 

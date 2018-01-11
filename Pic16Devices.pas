@@ -252,6 +252,15 @@ begin
      pic.SetStatRAMCom('100-104:SFR, 106-106:SFR, 10A-10F:SFR, 120-17F:GPR');
      pic.SetStatRAMCom('180-184:SFR, 186-186:SFR, 18A-18F:SFR, 1A0-1FF:GPR');
      pic.SetMappRAMCom('120-17F:bnk0, 1A0-1FF:bnk1');
+     pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('005:0-2,1-3,2-4,3-5,4-6,5-7');
+     pic.ram[$006].name := 'PORTB';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('006:0-21,1-22,2-23,3-24,4-25,5-26,6-27,7-28');
+     pic.ram[$007].name := 'PORTC';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('007:0-11,1-12,2-13,3-14,4-15,5-16,6-17,7-18');
+     PIC.SetPin(8, 'VSS', pptGND);
+     PIC.SetPin(19, 'VSS', pptGND);
+     PIC.SetPin(20, 'VDD', pptVcc);	 
    end;
    'PIC16F874',
    'PIC16F874A': begin
@@ -288,6 +297,15 @@ begin
      pic.SetStatRAMCom('100-104:SFR, 106-106:SFR, 10A-10F:SFR, 110-17F:GPR');
      pic.SetStatRAMCom('180-184:SFR, 186-186:SFR, 18A-18F:SFR, 190-1FF:GPR');
      pic.SetMappRAMCom('0F0-0FF:bnk0, 170-17F:bnk0, 1F0-1FF:bnk0');
+     pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('005:0-2,1-3,2-4,3-5,4-6,5-7');
+     pic.ram[$006].name := 'PORTB';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('006:0-21,1-22,2-23,3-24,4-25,5-26,6-27,7-28');
+     pic.ram[$007].name := 'PORTC';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
+     pic.MapRAMtoPIN('007:0-11,1-12,2-13,3-14,4-15,5-16,6-17,7-18');
+     PIC.SetPin(8, 'VSS', pptGND);
+     PIC.SetPin(19, 'VSS', pptGND);
+     PIC.SetPin(20, 'VDD', pptVcc);
    end;
    'PIC16F877',
    'PIC16F877A': begin
