@@ -125,21 +125,22 @@ type //Modelo de la memoria RAM
 
 type  //Models for Flash memory
   TPIC16FlashCell = record
-    value     : word;     //value of the memory
-    used      : boolean;  //indicate if have been written
+    value     : word;     //Value of the memory (OpCode)
+    used      : boolean;  //Indicate if have been written
+    curBnk    : byte;     //Current RAM bank where it's supposed this Opcode works.
     //Information of position in source code. Used for debug
     rowSrc    : word;     //Row number
     colSrc    : word;     //Column number
-    idFile    : SmallInt;     //Index to a file. No load the name to save space.
+    idFile    : SmallInt; //Index to a file. No load the name to save space.
     {Estos campos de cadena ocupan bastante espacio, aún cuado están en NULL. Si se
     quisiera optimizar el uso de RAM, se podría pensar en codificar, varios campos en
     una sola cadena.}
-    topLabel  : string;   //label on the top of the cell.
-    topComment: string;   //comment on the top of the cell.
-    sideComment: string;  //right comment to code
+    topLabel   : string;  //Label on the top of the cell.
+    topComment : string;  //Comment on the top of the cell.
+    sideComment: string;  //Right comment to code
     //Campos para deputación
     breakPnt  : boolean;  //Indicates if this cell have a Breakpoint
-    {tener cuidado con el tamaño de este registro, pues se va a multiplicar por 8192}
+    {Be careful on the size of this record, because it's going to be multiplied by 8192}
   end;
   TPIC16Flash = array[0..PIC_MAX_FLASH-1] of TPIC16FlashCell;
   ptrPIC16Flash = ^TPIC16Flash;
@@ -265,7 +266,7 @@ type
     iFlash: integer;   //puntero a la memoria Flash, para escribir
     MsjError: string;
     procedure Decode(const opCode: word);  //decodifica instrucción
-    function Disassembler(useVarName: boolean=false): string;  //Desensambla la instrucción actual
+    function Disassembler(const opCode: word; useVarName: boolean = false): string;  //Desensambla la instrucción actual
     property banks[i : Longint]: TRAMBank Read GetBank;
     property pages[i : Longint]: TFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
@@ -984,13 +985,14 @@ begin
     end;
   end;
 end;
-function TPIC16.Disassembler(useVarName: boolean = false): string;
-{Desensambla la instrucción, actual. No se reciben parámetros sino que se usan los
+function TPIC16.Disassembler(const opCode: word; useVarName: boolean = false): string;
+{Desensambla la instrucción "opCode". No se reciben parámetros sino que se usan los
 campos globales, para mejorar la velocidad. Se debe llamar después de llamar a Decode()
 para que se actualicen las variables que usa.}
 var
   nemo: String;
 begin
+  Decode(opCode);   //decodifica instrucción
   nemo := lowerCase(trim(PIC16InstName[idIns])) + ' ';
   case idIns of
   ADDWF,
@@ -1008,11 +1010,13 @@ begin
   SWAPF,
   XORWF: begin
       if useVarName and (ram[f_].name<>'') then begin
+        //Include address name
         if d_ = toF then
           Result := nemo + ram[f_].name + ',f'
         else
           Result := nemo + ram[f_].name + ',w';
       end else begin
+        //No include address name
         if d_ = toF then
           Result := nemo + '0x'+IntToHex(f_,3) + ',f'
         else
@@ -2139,13 +2143,14 @@ var
   i: Integer;
 begin
   for i:=0 to high(flash) do begin
-    flash[i].value := $3FFF;
-    flash[i].used := false;
+    flash[i].value    := $3FFF;
+    flash[i].used     := false;
+    flash[i].curBnk   := 255;  //Desconocido
     flash[i].breakPnt := false;
     flash[i].topLabel   := '';
     flash[i].sideComment:= '';
     flash[i].topComment := '';
-    flash[i].idFile := -1;  //Indica no inicializado
+    flash[i].idFile   := -1;  //Indica no inicializado
   end;
 end;
 procedure TPIC16.GenHex(hexFile: string; ConfigWord: integer = -1);
@@ -2257,17 +2262,16 @@ begin
     lblLin := flash[i].topLabel;
     comLat := flash[i].sideComment;
     comLin := flash[i].topComment;
-    //Decodifica instrucción
-    val := flash[i].value;
-    Decode(val);   //decodifica instrucción
     //Escribe etiqueta al inicio de línea
     if lblLin<>'' then lOut.Add(lblLin+':');
     //Escribe comentario al inicio de línea
     if incCom and (comLin<>'') then  begin
       lOut.Add(comLin);
     end;
+    //Decodifica instrucción
+    val := flash[i].value;
     //Escribe línea
-    lin := Disassembler(incVarNam);  //Instrucción
+    lin := Disassembler(val, incVarNam);  //Instrucción
     //Verificas si incluye dirección física
     if incAdrr then  begin
       lin := '0x'+IntToHex(i,3) + ' ' + lin;
