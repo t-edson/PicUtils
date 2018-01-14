@@ -266,7 +266,8 @@ type
     iFlash: integer;   //puntero a la memoria Flash, para escribir
     MsjError: string;
     procedure Decode(const opCode: word);  //decodifica instrucción
-    function Disassembler(const opCode: word; useVarName: boolean = false): string;  //Desensambla la instrucción actual
+    function Disassembler(const opCode: word; bankNum: byte = 255;
+      useVarName: boolean = false): string;  //Desensambla la instrucción actual
     property banks[i : Longint]: TRAMBank Read GetBank;
     property pages[i : Longint]: TFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
@@ -985,12 +986,21 @@ begin
     end;
   end;
 end;
-function TPIC16.Disassembler(const opCode: word; useVarName: boolean = false): string;
-{Desensambla la instrucción "opCode". No se reciben parámetros sino que se usan los
-campos globales, para mejorar la velocidad. Se debe llamar después de llamar a Decode()
-para que se actualicen las variables que usa.}
+function TPIC16.Disassembler(const opCode: word; bankNum: byte = 255;
+                             useVarName: boolean = false): string;
+{Desensambla la instrucción "opCode". Esta rutina utiliza las variables: d_, f_, b_ y k_
+"opCode"  -> Código de Operación que se desea decodificar. Se asuem que es de 14 bits.
+"bankNum" -> Es el banco de trabajo en el que se supone se está decodificando el OpCode.
+             Se usa para determinar la dirección de memoria real a la que se accede
+             (cuando el OpCode alccede a memoria). Si no se conoce el valor, se debe
+             poner en 255.
+"useVarName" -> Indica que se quiere usar etiquetas para los nombres de las variables
+             (En los Opcode que accedan a memoria). Solo es válido cuando
+             bankNum = 0,1,2,3 y exista un nombre asociado a la variable.
+}
 var
   nemo: String;
+  f: word;
 begin
   Decode(opCode);   //decodifica instrucción
   nemo := lowerCase(trim(PIC16InstName[idIns])) + ' ';
@@ -1009,40 +1019,67 @@ begin
   SUBWF,
   SWAPF,
   XORWF: begin
-      if useVarName and (ram[f_].name<>'') then begin
-        //Include address name
-        if d_ = toF then
-          Result := nemo + ram[f_].name + ',f'
-        else
-          Result := nemo + ram[f_].name + ',w';
+      if bankNum in [0,1,2,3] then begin
+        //Banco conocido
+        f := f_ + $80*bankNum;  //Dirección real
       end else begin
-        //No include address name
+        //Se asume un banco desconocido
+        useVarName := false;  //Desactiva por si acaso
+        bankNum := 0;  //Trabajará en este banco
+        f := f;        //Dirección asumida
+      end;
+      if useVarName and (ram[f].name<>'') then begin
+        //Required to include address name
         if d_ = toF then
-          Result := nemo + '0x'+IntToHex(f_,3) + ',f'
+          Result := nemo + ram[f].name + ',f'
         else
-          Result := nemo + '0x'+IntToHex(f_,3) + ',w';
+          Result := nemo + ram[f].name + ',w';
+      end else begin
+        //No Required to include address name
+        if d_ = toF then
+          Result := nemo + '0x'+IntToHex(f,3) + ',f'
+        else
+          Result := nemo + '0x'+IntToHex(f,3) + ',w';
       end;
      end;
   CLRF,
   MOVWF: begin
-        if useVarName and (ram[f_].name<>'') then begin
-          Result := nemo + ram[f_].name;
+        if bankNum in [0,1,2,3] then begin
+          //Banco conocido
+          f := f_ + $80*bankNum;  //Dirección real
         end else begin
-          Result := nemo + '0x'+IntToHex(f_,3);
+          //Se asume un banco desconocido
+          useVarName := false;  //Desactiva por si acaso
+          bankNum := 0;  //Trabajará en este banco
+          f := f;        //Dirección asumida
+        end;
+        if useVarName and (ram[f].name<>'') then begin
+          Result := nemo + ram[f].name;
+        end else begin
+          Result := nemo + '0x'+IntToHex(f,3);
         end;
      end;
   BCF,
   BSF,
   BTFSC,
   BTFSS: begin    //Instrucciones de bit
-      if useVarName and (ram[f_].bitname[b_]<>'') then begin
-        //Hay nombre de bit
-        Result := nemo + ram[f_].bitname[b_];
-      end else if useVarName and (ram[f_].name<>'') then begin
-        //Hay nombre de byte
-        Result := nemo + ram[f_].name + ', ' + IntToStr(b_);
+      if bankNum in [0,1,2,3] then begin
+        //Banco conocido
+        f := f_ + $80*bankNum;  //Dirección real
       end else begin
-        Result := nemo + '0x'+IntToHex(f_,3) + ', ' + IntToStr(b_);
+        //Se asume un banco desconocido
+        useVarName := false;  //Desactiva por si acaso
+        bankNum := 0;  //Trabajará en este banco
+        f := f;        //Dirección asumida
+      end;
+      if useVarName and (ram[f].bitname[b_]<>'') then begin
+        //Hay nombre de bit
+        Result := nemo + ram[f].bitname[b_];
+      end else if useVarName and (ram[f].name<>'') then begin
+        //Hay nombre de byte
+        Result := nemo + ram[f].name + ', ' + IntToStr(b_);
+      end else begin
+        Result := nemo + '0x'+IntToHex(f,3) + ', ' + IntToStr(b_);
       end;
      end;
   ADDLW,
@@ -2255,6 +2292,7 @@ procedure TPIC16.DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);
 var
   val, i: Word;
   lblLin, comLat, comLin, lin: String;
+  bnk: Byte;
 begin
   //Se supone que minUsed y maxUsed, ya deben haber sido actualizados.
   for i := minUsed to maxUsed do begin
@@ -2270,8 +2308,9 @@ begin
     end;
     //Decodifica instrucción
     val := flash[i].value;
+    bnk := flash[i].curBnk;
     //Escribe línea
-    lin := Disassembler(val, incVarNam);  //Instrucción
+    lin := Disassembler(val, bnk, incVarNam);  //Instrucción
     //Verificas si incluye dirección física
     if incAdrr then  begin
       lin := '0x'+IntToHex(i,3) + ' ' + lin;
