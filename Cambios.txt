@@ -8,6 +8,7 @@ Se elimina TRAMBank.GetFreeByte().
 Se elimina TRAMBank.ExploreUsed() y se modifica TPIC16.ExploreUsed() para trabajar
 directamente sin llamar a TRAMBank.ExploreUsed().
 Se elimina TRAMBank.AvailBit().
+Se modifica TPIC16.Disassembler() para que pida el OpCode como parámetro.
 
 1.1
 ===
