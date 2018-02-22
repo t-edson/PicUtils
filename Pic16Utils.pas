@@ -197,13 +197,14 @@ type
     procedure GenHexData(Address: word; Data: string);
     procedure GenHexEOF;
     function StrHexFlash(i1, i2: integer): string;
-  private //Campos para procesar instrucciones
-    FMaxFlash: integer;
+  public  //Campos para procesar instrucciones
     idIns: TPIC16Inst;    //ID de Instrucción.
     d_   : TPIC16destin;  //Destino de operación. Válido solo en algunas instrucciones.
     f_   : byte;          //Registro destino. Válido solo en algunas instrucciones.
     b_   : byte;          //Bit destino. Válido solo en algunas instrucciones.
     k_   : word;          //Parámetro Literal. Válido solo en algunas instrucciones.
+  private //Campos para procesar instrucciones
+    FMaxFlash: integer;
     function GetBank(i : Longint): TRAMBank;
     function GetINTCON: byte;
     function GetINTCON_GIE: boolean;
@@ -794,7 +795,6 @@ begin
   %01100000: Result := ram[f_+$180].value;
   end;
 end;
-
 procedure TPIC16.Decode(const opCode: word);
 {Decodifica la instrucción indicada. Actualiza siempre la variable "idIns", y
 dependiendo de la instrucción, puede actualizar: d_, f_, b_ y k_}
