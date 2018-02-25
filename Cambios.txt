@@ -1,3 +1,11 @@
+1.3
+===
+Se cambia la forma de trabajo, en algunas rutinas, para especificar direcciones de 
+memoria. Ahora se usa el campo "addr" para almacenar la dirección base, en lugar
+de usar los campos "offs" y "bank".
+
+
+
 1.2
 ===
 Se elimina el método TRAMBank.GetFreeBytes() y se modifica TPIC16.GetFreeBytes()

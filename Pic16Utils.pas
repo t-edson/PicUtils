@@ -276,9 +276,9 @@ type
     //Funciones para la memoria RAM
     function HaveConsecGPR(const i, n: word; maxRam: word): boolean; //Indica si hay "n" bytes libres
     procedure UseConsecGPR(const i, n: word);  //Ocupa "n" bytes en la posición "i"
-    function GetFreeBit(var offs, bnk, bit: byte; shared: boolean): boolean;
-    function GetFreeByte(out offs, bnk: byte; shared: boolean): boolean;
-    function GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;  //obtiene una dirección libre
+    function GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;
+    function GetFreeByte(out addr: word; shared: boolean): boolean;
+    function GetFreeBytes(const size: integer; var addr: word): boolean;  //obtiene una dirección libre
     function TotalMemRAM: word; //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
     procedure ExploreUsed(rutExplorRAM: TRutExplorRAM);    //devuelve un reporte del uso de la RAM
@@ -297,7 +297,7 @@ type
     //funciones para manejo de nombres
     function NameRAM(const addr: word; const bnk: byte): string;
     function NameRAMbit(const addr: word; const bnk,bit: byte): string;
-    procedure SetNameRAM(const addr: word; const bnk: byte; const nam: string);  //Fija nombre a una celda de RAM
+    procedure SetNameRAM(const addr: word; const nam: string);  //Fija nombre a una celda de RAM
     procedure AddNameRAM(const addr: word; const bnk: byte; const nam: string);  //Agrega nombre a una celda de RAM
     procedure SetNameRAMbit(const addr: word; const bnk, bit: byte; const nam: string);  //Fija nombre a un bitde RAM
     //funciones para la memoria Flash
@@ -1620,7 +1620,7 @@ begin
     ram[j].used:=255;  //todos los bits
   end;
 end;
-function TPIC16.GetFreeBit(var offs, bnk, bit: byte; shared: boolean): boolean;
+function TPIC16.GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;
 {Devuelve una dirección libre de la memoria RAM (y el banco).
 "Shared" indica que se marcará el bit como de tipo "Compartido", y se usa para el
 caso en que se quiera comaprtir la misma posición para diversos variables.
@@ -1635,8 +1635,7 @@ begin
   for i:=0 to maxRam-1 do begin
     if (ram[i].state = cs_impleGPR) and (ram[i].used <> 255) then begin
       //Esta dirección tiene al menos un bit libre
-      offs := i and $7F;  //devuelve dirección
-      bnk := i >> 7;
+      addr := i;  //devuelve dirección
       //busca el bit libre
       if          (ram[i].used and %00000001) = 0 then begin
         bit:=0;
@@ -1665,8 +1664,8 @@ begin
     end;
   end;
 end;
-function TPIC16.GetFreeByte(out offs, bnk: byte; shared: boolean): boolean;
-{Devuelve una dirección libre de la memoria flash (y el banco).
+function TPIC16.GetFreeByte(out addr: word; shared: boolean): boolean;
+{Devuelve una dirección libre de la memoria flash.
 "Shared" indica que se marcará el bit como de tipo "Compartido", y se usa para el
 caso en que se quiera comaprtir la misma posición para diversos variables.
 Si encuentra espacio, devuelve TRUE.}
@@ -1684,15 +1683,14 @@ begin
       if shared then begin
         ram[i].shared := 255;  //Marca como compartido
       end;
-      offs := i and $7F;  //devuelve dirección
-      bnk := i >> 7;
+      addr := i;
       //Notar que la posición de memoria puede estar mapeada a otro banco.
       Result := true;  //indica que encontró espacio
       exit;
     end;
   end;
 end;
-function TPIC16.GetFreeBytes(const size: integer; var offs, bnk: byte): boolean;
+function TPIC16.GetFreeBytes(const size: integer; var addr: word): boolean;
 {Devuelve una dirección libre de la memoria flash (y el banco) para ubicar un bloque
  del tamaño indicado. Si encuentra espacio, devuelve TRUE.
  El tamaño se da en bytes, pero si el valor es negativo, se entiende que es en bits.}
@@ -1707,8 +1705,7 @@ begin
     if HaveConsecGPR(i, size, maxRam) then begin
       //encontró del tamaño buscado
       UseConsecGPR(i, size);  //marca como usado
-      offs := i and $7F;
-      bnk  := i >> 7;
+      addr := i;
       Result := true;  //indica que encontró espacio
       exit;
     end;
@@ -2142,11 +2139,11 @@ function TPIC16.NameRAMbit(const addr: word; const bnk, bit: byte): string;
 begin
   Result := ram[BankToAbsRAM(addr, bnk)].bitname[bit];
 end;
-procedure TPIC16.SetNameRAM(const addr: word; const bnk: byte; const nam: string
+procedure TPIC16.SetNameRAM(const addr: word; const nam: string
   );
 {Escribe en el campo "name" de la RAM en la psoición indicada}
 begin
-   ram[BankToAbsRAM(addr, bnk)].name:=nam;
+   ram[addr].name:=nam;
 end;
 procedure TPIC16.AddNameRAM(const addr: word; const bnk: byte; const nam: string
   );
