@@ -299,7 +299,7 @@ type
     function NameRAMbit(const addr: word; const bnk,bit: byte): string;
     procedure SetNameRAM(const addr: word; const nam: string);  //Fija nombre a una celda de RAM
     procedure AddNameRAM(const addr: word; const bnk: byte; const nam: string);  //Agrega nombre a una celda de RAM
-    procedure SetNameRAMbit(const addr: word; const bnk, bit: byte; const nam: string);  //Fija nombre a un bitde RAM
+    procedure SetNameRAMbit(const addr: word; const bit: byte; const nam: string);  //Fija nombre a un bitde RAM
     //funciones para la memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
     procedure ClearMemFlash;
@@ -307,8 +307,8 @@ type
     procedure SetSharedUsed;
     //Métodos para codificar instrucciones de acuerdo a la sintaxis
     procedure useFlash;
-    procedure codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
-    procedure codAsmF(const inst: TPIC16Inst; const f: byte);
+    procedure codAsmFD(const inst: TPIC16Inst; const f: word; d: TPIC16destin);
+    procedure codAsmF(const inst: TPIC16Inst; const f: word);
     procedure codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
     procedure codAsmK(const inst: TPIC16Inst; const k: byte);
     procedure codAsmA(const inst: TPIC16Inst; const a: word);
@@ -444,7 +444,7 @@ begin
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
-procedure TPIC16.codAsmFD(const inst: TPIC16Inst; const f: byte; d: TPIC16destin);
+procedure TPIC16.codAsmFD(const inst: TPIC16Inst; const f: word; d: TPIC16destin);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f,d}
 begin
   case inst of
@@ -467,7 +467,7 @@ begin
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
-procedure TPIC16.codAsmF(const inst: TPIC16Inst; const f: byte);
+procedure TPIC16.codAsmF(const inst: TPIC16Inst; const f: word);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f}
 begin
   case inst of
@@ -2156,11 +2156,10 @@ begin
     ram[BankToAbsRAM(addr, bnk)].name+=','+nam;
   end;
 end;
-procedure TPIC16.SetNameRAMbit(const addr: word; const bnk, bit: byte;
-  const nam: string);
+procedure TPIC16.SetNameRAMbit(const addr: word; const bit: byte; const nam: string);
 begin
   if (bit>7) then exit;
-  ram[BankToAbsRAM(addr, bnk)].bitname[bit] := nam;
+  ram[addr].bitname[bit] := nam;
 end;
 //Funciones para la memoria Flash
 function TPIC16.UsedMemFlash: word;
