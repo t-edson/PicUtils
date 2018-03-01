@@ -127,7 +127,8 @@ type  //Models for Flash memory
   TPIC16FlashCell = record
     value     : word;     //Value of the memory (OpCode)
     used      : boolean;  //Indicate if have been written
-    curBnk    : byte;     //Current RAM bank where it's supposed this Opcode works.
+    curBnk    : byte;     {Current RAM bank where it's supposed this Opcode works.
+                           The current bank can be different after executing this OpCode.}
     //Information of position in source code. Used for debug
     rowSrc    : word;     //Row number
     colSrc    : word;     //Column number
@@ -309,7 +310,7 @@ type
     procedure useFlash;
     procedure codAsmFD(const inst: TPIC16Inst; const f: word; d: TPIC16destin);
     procedure codAsmF(const inst: TPIC16Inst; const f: word);
-    procedure codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
+    procedure codAsmFB(const inst: TPIC16Inst; const f: word; b: byte);
     procedure codAsmK(const inst: TPIC16Inst; const k: byte);
     procedure codAsmA(const inst: TPIC16Inst; const a: word);
     procedure codAsm(const inst: TPIC16Inst);
@@ -478,7 +479,7 @@ begin
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
-procedure TPIC16.codAsmFB(const inst: TPIC16Inst; const f: byte; b: byte);
+procedure TPIC16.codAsmFB(const inst: TPIC16Inst; const f: word; b: byte);
 //Codifica las instrucciones orientadas a bit.
 begin
   case inst of
