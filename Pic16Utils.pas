@@ -2287,9 +2287,9 @@ procedure TPIC16.DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);
 {Desensambla las instrucciones grabadas en el PIC.
  Se debe llamar despues de llamar a GenHex(), para que se actualicen las variables}
 var
-  val, i: Word;
+  valOp, i: Word;
   lblLin, comLat, comLin, lin: String;
-  bnk: Byte;
+  bnkOp: Byte;
 begin
   //Se supone que minUsed y maxUsed, ya deben haber sido actualizados.
   for i := minUsed to maxUsed do begin
@@ -2304,10 +2304,10 @@ begin
       lOut.Add(comLin);
     end;
     //Decodifica instrucción
-    val := flash[i].value;
-    bnk := flash[i].curBnk;
+    valOp := flash[i].value;
+    bnkOp := flash[i].curBnk;
     //Escribe línea
-    lin := Disassembler(val, bnk, incVarNam);  //Instrucción
+    lin := Disassembler(valOp, bnkOp, incVarNam);  //Instrucción
     //Verificas si incluye dirección física
     if incAdrr then  begin
       lin := '0x'+IntToHex(i,3) + ' ' + lin;
