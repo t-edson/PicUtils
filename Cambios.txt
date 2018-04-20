@@ -1,3 +1,8 @@
+1.4
+===
+Se incluyen unidades nuevas para definir a los PIC del la linea Baseline.
+
+
 1.3
 ===
 Se cambia la forma de trabajo, en algunas rutinas, para especificar direcciones de 
