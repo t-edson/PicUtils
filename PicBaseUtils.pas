@@ -20,7 +20,7 @@ const
   PIC_MAX_PINES = 64;   //Máxima cantidad de pines para el encapsulado
 type  //tipos para instrucciones
   //Instrucciones para la serie 16
-  TPIC16Inst = (
+  TPICBaseInst = (
     //BYTE-ORIENTED FILE REGISTER OPERATIONS
     ADDWF,
     ANDWF,
@@ -46,25 +46,27 @@ type  //tipos para instrucciones
     BTFSC,
     BTFSS,
     //LITERAL AND CONTROL OPERATIONS
-    ADDLW,
+    //ADDLW,
     ANDLW,
     CALL,
     CLRWDT,
     GOTO_,
     IORLW,
     MOVLW,
-    RETFIE,
+    //RETFIE,
     RETLW,
-    RETURN,
+    //RETURN,
     SLEEP,
-    SUBLW,
+    //SUBLW,
     XORLW,
+    OPTION,
+    TRIS,
     _Inval
   );
   //Indica el destino de la instrucción
   TPIC16destin = (
-    toW = %00000000,    //al acumulador
-    toF = %10000000     //a memoria
+    toW = %000000,    //al acumulador
+    toF = %100000     //a memoria
   );
 
 
@@ -193,7 +195,7 @@ type
     procedure GenHexEOF;
     function StrHexFlash(i1, i2: integer): string;
   public  //Campos para procesar instrucciones
-    idIns: TPIC16Inst;    //ID de Instrucción.
+    idIns: TPICBaseInst;    //ID de Instrucción.
     d_   : TPIC16destin;  //Destino de operación. Válido solo en algunas instrucciones.
     f_   : byte;          //Registro destino. Válido solo en algunas instrucciones.
     b_   : byte;          //Bit destino. Válido solo en algunas instrucciones.
@@ -238,7 +240,7 @@ type
     nClck : Int64;  //Contador de ciclos de reloj
     CommStop: boolean;  //Bandera para detener la ejecución
     OnExecutionMsg: procedure(message: string) of object;  //Genera mensaje en ejecución
-    function CurInstruction: TPIC16Inst;
+    function CurInstruction: TPICBaseInst;
     procedure Exec(pc: word);  //Ejecuta la instrucción en la dirección indicada.
     procedure Exec();  //Ejecuta instrucción actual
     procedure ExecTo(endAdd: word);  //Ejecuta hasta cierta dirección
@@ -302,16 +304,16 @@ type
     procedure SetSharedUsed;
     //Métodos para codificar instrucciones de acuerdo a la sintaxis
     procedure useFlash;
-    procedure codAsmFD(const inst: TPIC16Inst; const f: word; d: TPIC16destin);
-    procedure codAsmF(const inst: TPIC16Inst; const f: word);
-    procedure codAsmFB(const inst: TPIC16Inst; const f: word; b: byte);
-    procedure codAsmK(const inst: TPIC16Inst; const k: byte);
-    procedure codAsmA(const inst: TPIC16Inst; const a: word);
-    procedure codAsm(const inst: TPIC16Inst);
+    procedure codAsmFD(const inst: TPICBaseInst; const f: word; d: TPIC16destin);
+    procedure codAsmF(const inst: TPICBaseInst; const f: word);
+    procedure codAsmFB(const inst: TPICBaseInst; const f: word; b: byte);
+    procedure codAsmK(const inst: TPICBaseInst; const k: byte);
+    procedure codAsmA(const inst: TPICBaseInst; const a: word);
+    procedure codAsm(const inst: TPICBaseInst);
     procedure codGotoAt(iflash0: integer; const k: word);
     procedure codCallAt(iflash0: integer; const k: word);
     //Métodos adicionales
-    function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
+    function FindOpcode(Op: string; var syntax: string): TPICBaseInst;  //busca Opcode
     procedure addTopLabel(lbl: string);  //Add a comment to the ASM code
     procedure addTopComm(comm: string; replace: boolean = true);  //Add a comment to the ASM code
     procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
@@ -325,9 +327,9 @@ type
 
 var  //variables globales
   //mnemónico de las instrucciones
-  PIC16InstName: array[low(TPIC16Inst)..high(TPIC16Inst)] of string[7];
+  PIC16InstName: array[low(TPICBaseInst)..high(TPICBaseInst)] of string[7];
   //sintaxis en ensamblador de las instrucciones
-  PIC16InstSyntax: array[low(TPIC16Inst)..high(TPIC16Inst)] of string[5];
+  PIC16InstSyntax: array[low(TPICBaseInst)..high(TPICBaseInst)] of string[5];
 
 implementation
 
@@ -439,121 +441,119 @@ begin
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
-procedure TPIC16.codAsmFD(const inst: TPIC16Inst; const f: word; d: TPIC16destin);
+procedure TPIC16.codAsmFD(const inst: TPICBaseInst; const f: word; d: TPIC16destin);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f,d}
 begin
   case inst of
-  ADDWF : flash[iFlash].value := %00011100000000 + ord(d) + (f and %1111111);
-  ANDWF : flash[iFlash].value := %00010100000000 + ord(d) + (f and %1111111);
-  COMF  : flash[iFlash].value := %00100100000000 + ord(d) + (f and %1111111);
-  DECF  : flash[iFlash].value := %00001100000000 + ord(d) + (f and %1111111);
-  DECFSZ: flash[iFlash].value := %00101100000000 + ord(d) + (f and %1111111);
-  INCF  : flash[iFlash].value := %00101000000000 + ord(d) + (f and %1111111);
-  INCFSZ: flash[iFlash].value := %00111100000000 + ord(d) + (f and %1111111);
-  IORWF : flash[iFlash].value := %00010000000000 + ord(d) + (f and %1111111);
-  MOVF  : flash[iFlash].value := %00100000000000 + ord(d) + (f and %1111111);
-  RLF   : flash[iFlash].value := %00110100000000 + ord(d) + (f and %1111111);
-  RRF   : flash[iFlash].value := %00110000000000 + ord(d) + (f and %1111111);
-  SUBWF : flash[iFlash].value := %00001000000000 + ord(d) + (f and %1111111);
-  SWAPF : flash[iFlash].value := %00111000000000 + ord(d) + (f and %1111111);
-  XORWF : flash[iFlash].value := %00011000000000 + ord(d) + (f and %1111111);
+  ADDWF : flash[iFlash].value := %000111000000 + ord(d) + (f and %11111);
+  ANDWF : flash[iFlash].value := %000101000000 + ord(d) + (f and %11111);
+  COMF  : flash[iFlash].value := %001001000000 + ord(d) + (f and %11111);
+  DECF  : flash[iFlash].value := %000011000000 + ord(d) + (f and %11111);
+  DECFSZ: flash[iFlash].value := %001011000000 + ord(d) + (f and %11111);
+  INCF  : flash[iFlash].value := %001010000000 + ord(d) + (f and %11111);
+  INCFSZ: flash[iFlash].value := %001111000000 + ord(d) + (f and %11111);
+  IORWF : flash[iFlash].value := %000100000000 + ord(d) + (f and %11111);
+  MOVF  : flash[iFlash].value := %001000000000 + ord(d) + (f and %11111);
+  RLF   : flash[iFlash].value := %001101000000 + ord(d) + (f and %11111);
+  RRF   : flash[iFlash].value := %001100000000 + ord(d) + (f and %11111);
+  SUBWF : flash[iFlash].value := %000010000000 + ord(d) + (f and %11111);
+  SWAPF : flash[iFlash].value := %001110000000 + ord(d) + (f and %11111);
+  XORWF : flash[iFlash].value := %000110000000 + ord(d) + (f and %11111);
   else
     raise Exception.Create('Implementation Error.');
   end;
-  useFlash;  //marca como usado e incrementa puntero.
+  useFlash;  //Mark as "used" and increase pointer.
 end;
-procedure TPIC16.codAsmF(const inst: TPIC16Inst; const f: word);
+procedure TPIC16.codAsmF(const inst: TPICBaseInst; const f: word);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f}
 begin
   case inst of
-  CLRF  : flash[iFlash].value := %00000110000000 + (f and %1111111);
-  MOVWF : flash[iFlash].value := %00000010000000 + (f and %1111111);
+  CLRF  : flash[iFlash].value := %000001100000 + (f and %11111);
+  MOVWF : flash[iFlash].value := %000000100000 + (f and %11111);
+  TRIS  : flash[iFlash].value := %000000000000 + (f and %111);  //f = 5,6,7
   else
     raise Exception.Create('Implementation Error.');
   end;
-  useFlash;  //marca como usado e incrementa puntero.
+  useFlash;  //Mark as "used" and increase pointer.
 end;
-procedure TPIC16.codAsmFB(const inst: TPIC16Inst; const f: word; b: byte);
+procedure TPIC16.codAsmFB(const inst: TPICBaseInst; const f: word; b: byte);
 //Codifica las instrucciones orientadas a bit.
 begin
   case inst of
-  BCF  : flash[iFlash].value := %01000000000000 + word(b<<7) + (f and %1111111);
-  BSF  : flash[iFlash].value := %01010000000000 + word(b<<7) + (f and %1111111);
-  BTFSC: flash[iFlash].value := %01100000000000 + word(b<<7) + (f and %1111111);
-  BTFSS: flash[iFlash].value := %01110000000000 + word(b<<7) + (f and %1111111);
+  BCF  : flash[iFlash].value := %010000000000 + word(b<<5) + (f and %11111);
+  BSF  : flash[iFlash].value := %010100000000 + word(b<<5) + (f and %11111);
+  BTFSC: flash[iFlash].value := %011000000000 + word(b<<5) + (f and %11111);
+  BTFSS: flash[iFlash].value := %011100000000 + word(b<<5) + (f and %11111);
   else
     raise Exception.Create('Implementation Error.');
   end;
-  useFlash;  //marca como usado e incrementa puntero.
+  useFlash;  //Mark as "used" and increase pointer.
 end;
-procedure TPIC16.codAsmK(const inst: TPIC16Inst; const k: byte);
+procedure TPIC16.codAsmK(const inst: TPICBaseInst; const k: byte);
 {Codifica las instrucciones con constantes.}
 begin
   case inst of
-  ADDLW : flash[iFlash].value := %11111000000000 + k;
-  ANDLW : flash[iFlash].value := %11100100000000 + k;
-  IORLW : flash[iFlash].value := %11100000000000 + k;
-  MOVLW : flash[iFlash].value := %11000000000000 + k;
-  RETLW : flash[iFlash].value := %11010000000000 + k;
-  SUBLW : flash[iFlash].value := %11110000000000 + k;
-  XORLW : flash[iFlash].value := %11101000000000 + k;
+  ANDLW : flash[iFlash].value := %111000000000 + k;
+  IORLW : flash[iFlash].value := %110100000000 + k;
+  MOVLW : flash[iFlash].value := %110000000000 + k;
+  RETLW : flash[iFlash].value := %100000000000 + k;
+  XORLW : flash[iFlash].value := %111100000000 + k;
   else
     raise Exception.Create('Implementation Error.');
   end;
-  useFlash;  //marca como usado e incrementa puntero.
+  useFlash;  //Mark as "used" and increase pointer.
 end;
-procedure TPIC16.codAsmA(const inst: TPIC16Inst; const a: word);
+procedure TPIC16.codAsmA(const inst: TPICBaseInst; const a: word);
 {Codifica las instrucciones de control.
- "a" debe ser word, porque la dirección destino, requiere 11 bits.}
+ "a" debe ser word, porque la dirección destino, requiere hasta 9 bits.}
 begin
   case inst of
-  CALL  : flash[iFlash].value := %10000000000000 + (a and %11111111111);
-  GOTO_ : flash[iFlash].value := %10100000000000 + (a and %11111111111);
+  CALL  : flash[iFlash].value := %100100000000 + (a and %11111111);
+  GOTO_ : flash[iFlash].value := %101000000000 + (a and %111111111);
   else
     raise Exception.Create('Implementation Error.');
   end;
-  useFlash;  //marca como usado e incrementa puntero.
+  useFlash;  //Mark as "used" and increase pointer.
 end;
-procedure TPIC16.codAsm(const inst: TPIC16Inst);
+procedure TPIC16.codAsm(const inst: TPICBaseInst);
 //Codifica las instrucciones de control.
 begin
   case inst of
-  CLRW  : flash[iFlash].value := %00000110000000;
-  NOP   : flash[iFlash].value := %00000000000000;
-  CLRWDT: flash[iFlash].value := %00000001100100;
-  RETFIE: flash[iFlash].value := %00000000001001;
-  RETURN: flash[iFlash].value := %00000000001000;
-  SLEEP : flash[iFlash].value := %00000001100011;
+  CLRW  : flash[iFlash].value := %000001000000;
+  NOP   : flash[iFlash].value := %000000000000;
+  CLRWDT: flash[iFlash].value := %000000000100;
+  SLEEP : flash[iFlash].value := %000000000011;
+  OPTION: flash[iFlash].value := %000000000010;
   else
     raise Exception.Create('Implementation Error.');
   end;
-  useFlash;  //marca como usado e incrementa puntero.
+  useFlash;  //Mark as "used" and increase pointer.
 end;
 procedure TPIC16.codGotoAt(iflash0: integer; const k: word);
 {Codifica una instrucción GOTO, en una posición específica y sin alterar el puntero "iFlash"
 actual. Se usa para completar saltos indefinidos}
 begin
-  flash[iFlash0].value := %10100000000000 + (k and %11111111111);
+  flash[iFlash0].value := %101000000000 + (k and %111111111);
 end;
 procedure TPIC16.codCallAt(iflash0: integer; const k: word);
 {Codifica una instrucción CALL, en una posición específica y sin alterar el puntero "iFlash"
 actual. Se usa para completar llamadas indefinidas}
 begin
-  flash[iFlash0].value := %10000000000000 + (k and %11111111111);
+  flash[iFlash0].value := %100100000000 + (k and %11111111);
 end;
 
-function TPIC16.FindOpcode(Op: string; var syntax: string): TPIC16Inst;
+function TPIC16.FindOpcode(Op: string; var syntax: string): TPICBaseInst;
 {Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
  el identificador de instrucción y una cadena que representa a la sintaxis en "syntax".
  Si no encuentra devuelve "_Inval". }
 var
-  idInst: TPIC16Inst;
+  idInst: TPICBaseInst;
   tmp: String;
   found: Boolean;
 begin
   found := false;
   tmp := UpperCase(Op);
-  for idInst := low(TPIC16Inst) to high(TPIC16Inst) do begin
+  for idInst := low(TPICBaseInst) to high(TPICBaseInst) do begin
     if PIC16InstName[idInst] = tmp then begin
       found := true;
       break;
@@ -792,12 +792,49 @@ begin
 end;
 procedure TPIC16.Decode(const opCode: word);
 {Decodifica la instrucción indicada. Actualiza siempre la variable "idIns", y
-dependiendo de la instrucción, puede actualizar: d_, f_, b_ y k_}
+dependiendo de la instrucción, puede actualizar: d_, f_, b_ y k_
+
+0000 0000 0000	NOP
+0000 0000 0010	OPTION
+0000 0000 0011	SLEEP
+0000 0000 0100	CLRWDT
+0000 0000 01ff	TRIS f
+0000 0001 0kkk	MOVLB k*
+0000 001f ffff	MOVWF f
+0000 01df ffff	CLR f,d
+0000 10df ffff	SUBWF f,d
+0000 11df ffff	DECF f,d
+
+0001 00df ffff	IORWF f,d
+0001 01df ffff	ANDWF f,d
+0001 10df ffff	XORWF f,d
+0001 11df ffff	ADDWF f,d
+0010 00df ffff	MOVF f,d
+0010 01df ffff	COMF f,d
+0010 10df ffff	INCF f,d
+0010 11df ffff	DECFSZ f,d
+0011 00df ffff	RRF f,d
+0011 01df ffff	RLF f,d
+0011 10df ffff	SWAPF f,d
+0011 11df ffff	INCFSZ f,d
+0100 bbbf ffff	BCF f,b
+0101 bbbf ffff	BSF f,b
+0110 bbbf ffff	BTFSC f,b
+0111 bbbf ffff	BTFSS f,b
+1000 kkkk kkkk	RETLW k
+1001 kkkk kkkk	CALL k
+101k kkkk kkkk	GOTO k
+1100 kkkk kkkk	MOVLW k
+1101 kkkk kkkk	IORLW k
+1110 kkkk kkkk	ANDLW k
+1111 kkkk kkkk	XORLW k
+
+}
 var
   codH : byte;  //6 bits altos de la instrucción
   codL : byte;  //byte bajo de la instrucción
 begin
-  codH := (opCode and $3F00) >> 8;  //se debería optimizar
+  codH := (opCode and $0F00) >> 8;  //se debería optimizar
   codL := opCode and $00FF;
   case codH of
   %000111: begin
@@ -1102,7 +1139,7 @@ begin
     Result := 'Invalid'
   end;
 end;
-function TPIC16.CurInstruction: TPIC16Inst;
+function TPIC16.CurInstruction: TPICBaseInst;
 {Devuelve la instrucción, a la cue apunta PC, actualmente}
 var
   val: Word;
