@@ -1,6 +1,7 @@
 1.4
 ===
-Se incluyen unidades nuevas para definir a los PIC del la linea Baseline.
+Se cambian los nombres de algunos tipos en Pic16Utils.pas
+Se incluyen unidades nuevas para definir a los PIC del la linea "Baseline".
 
 
 1.3
