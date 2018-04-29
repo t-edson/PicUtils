@@ -1,7 +1,7 @@
 {
 Description
 ===========
-Utilities for programming baseline PIC microcontrollers with 12 bits instructions.
+Utilities for programming Baseline PIC microcontrollers with 12 bits instructions.
 Include most of the PIC10 devices.
 This unit works with 512 words pages and 32 bytes RAM banks.
 The main class TPIC16 must model all devices of this serie.
@@ -12,15 +12,14 @@ unit PicBaseUtils;
 {$mode objfpc}{$H+}
 interface
 uses
-  Classes, SysUtils, LCLProc;
+  Classes, SysUtils, LCLProc, PicCore;
 const
   PIC_BANK_SIZE = 32;  //Tamaño del banco de RAM
   PIC_MAX_RAM   = PIC_BANK_SIZE * 8;  //Máx RAM memory (8 banks)
   PIC_PAGE_SIZE = 512;
   PIC_MAX_FLASH = PIC_PAGE_SIZE * 4; //Máx Flash memeory (4 pages)
   PIC_MAX_PINES = 28;   //Máxima cantidad de pines para el encapsulado
-type  //tipos para instrucciones
-  //Instrucciones para la serie 16
+type  //Baseline PIC instructions
   TPICBaseInst = (
     //BYTE-ORIENTED FILE REGISTER OPERATIONS
     i_ADDWF,
@@ -75,46 +74,13 @@ type  //tipos para instrucciones
 
 
 type //Modelo de la memoria RAM
-  TPICBaseCellState = (
-     cs_impleSFR,   //Registros de funciones especiales. Habilitado para uso.
-     cs_impleGPR,   //Registros de uso general. Habilitado para uso.
-     cs_unimplem   //No implementado
-  );
-
-  { TPICBaseRamCell }
-  {Modela a una dirección lógica de la memoria RAM. Se ha taratdo de hacer una
-  definición eficiente de esta estructura para facilitar la implementación de
-  simuladores en tiempo real. Podemos usar un tamaño mediano para este registro,
-  porque no esperamos tener muchas celdas de RAM (<1K).}
-  TPICBaseRamCellPtr = ^TPICBaseRamCell;
-  TPICBaseRamCell = object
-  private
-    Fvalue  : byte;     //value of the memory
-    Fused   : byte;     //Bitmap. Indicates the used bits ($00->all free; $ff->all bits used.)
-    Fimplem : byte;     //Bitmap. Indicates the implemented bits
-    function Getused: byte;
-    function Getvalue: byte;
-    procedure Setused(AValue: byte);
-    procedure Setvalue(AValue: byte);
-  public
-    addr   : word;     //dirección física de memoria, en donde está la celda.
-    name   : string;   //Name of the register (or variable)
-    bitname: array[0..7] of string;  //Name of the bits.
-    shared : byte;     //Used to share this register
-    state  : TPICBaseCellState;  //status of the cell
-    mappedTo: TPICBaseRamCellPtr;  //Indica que está mapeado a otra celda, de otra dirección
-    property value: byte read Getvalue write Setvalue;
-    property used: byte read Getused write Setused;
-    function AvailGPR: boolean;
-  end;
-  TPICBaseRam = array[0..PIC_MAX_RAM-1] of TPICBaseRamCell;
+  TPICBaseRam = array[0..PIC_MAX_RAM-1] of TPICRamCell;
   TPICBaseRamPtr = ^TPICBaseRam;
-  TPICBaseRutExplorRAM = procedure(offs, bnk: byte; regPtr: TPICBaseRamCellPtr) of object;
+  TPICBaseRutExplorRAM = procedure(offs, bnk: byte; regPtr: TPICRamCellPtr) of object;
   {Representa a un banco de memoria del PIC. En un banco las direcciones de memoria
    se mapean siempre desde $00 hasta $7F. No almacenan datos, solo usan referencias.}
-  TPICBaseRAMBankPtr = ^TPICBaseRAMBank;
-  { TPICBaseRAMBank }
-  TPICBaseRAMBank = object
+  { TPICRAMBank }
+  TPICRAMBank = object
   public
     numBank   : integer;       //Número de banco
     ramPtr    : TPICBaseRamPtr;  //Puntero a memoria RAM
@@ -124,26 +90,7 @@ type //Modelo de la memoria RAM
   end;
 
 type  //Models for Flash memory
-  TPICBaseFlashCell = record
-    value     : word;     //Value of the memory (OpCode)
-    used      : boolean;  //Indicate if have been written
-    curBnk    : byte;     {Current RAM bank where it's supposed this Opcode works.
-                           The current bank can be different after executing this OpCode.}
-    //Information of position in source code. Used for debug
-    rowSrc    : word;     //Row number
-    colSrc    : word;     //Column number
-    idFile    : SmallInt; //Index to a file. No load the name to save space.
-    {Estos campos de cadena ocupan bastante espacio, aún cuado están en NULL. Si se
-    quisiera optimizar el uso de RAM, se podría pensar en codificar, varios campos en
-    una sola cadena.}
-    topLabel   : string;  //Label on the top of the cell.
-    topComment : string;  //Comment on the top of the cell.
-    sideComment: string;  //Right comment to code
-    //Campos para deputación
-    breakPnt  : boolean;  //Indicates if this cell have a Breakpoint
-    {Be careful on the size of this record, because it's going to be multiplied by 8192}
-  end;
-  TPICBaseFlash = array[0..PIC_MAX_FLASH-1] of TPICBaseFlashCell;
+  TPICBaseFlash = array[0..PIC_MAX_FLASH-1] of TPICFlashCell;
   TPICBaseFlashPtr = ^TPICBaseFlash;
 
   {Representa a una página de memoria del PIC. En una página las direcciones de memoria
@@ -155,46 +102,22 @@ type  //Models for Flash memory
     flash    : TPICBaseFlashPtr;  //puntero a memoria Flash
     AddrStart: word;           //dirección de inicio en la memoria flash total
   private
-    function Getmem(i : word): TPICBaseFlashCell;
-    procedure Setmem(i : word; AValue: TPICBaseFlashCell);
+    function Getmem(i : word): TPICFlashCell;
+    procedure Setmem(i : word; AValue: TPICFlashCell);
   public
     procedure Init(AddrStart0: word; flash0: TPICBaseFlashPtr);  //inicia objeto
-    property mem[i : word] : TPICBaseFlashCell read Getmem write Setmem;
+    property mem[i : word] : TPICFlashCell read Getmem write Setmem;
     //funciones para administración de la memoria
     function Total: word; //total de bytes que contiene
   end;
 
 type
-  TPICBasePinType = (
-    pptVcc,    //Alimentación
-    pptGND,    //Tierra
-    pptControl,//Pin de control
-    pptPort,   //Puerto Entrada/Salida
-    pptUnused  //Pin no usado
-  );
-
-  { TPICBasePin }
-  //Modela a un pin del PIC
-  TPICBasePin = object
-    nam: string;      //Eqtiueta o nombre
-    typ: TPICBasePinType; //Tipo de pin
-    add: word;        //Dirección en RAM
-    bit: byte;        //Bit en RAM
-    function GetLabel: string;
-  end;
-
   {Objeto que representa al hardware de un PIC de la serie 16}
   { TPICBase }
-  TPICBase = class
+  TPICBase = class(TPicCore)
   private  //Creación de archivo *.hex
-    hexLines : TStringList;  //Uusado para crear archivo *.hex
     minUsed  : word;         //Dirección menor de la ROM usada
     maxUsed  : word;         //Dirección mayor de la ROM usdas
-    function HexChecksum(const lin: string): string;
-    procedure GenHexComm(comment: string);
-    procedure GenHexExAdd(Data: word);
-    procedure GenHexData(Address: word; Data: string);
-    procedure GenHexEOF;
     function StrHexFlash(i1, i2: integer): string;
   public  //Campos para procesar instrucciones
     idIns: TPICBaseInst;    //ID de Instrucción.
@@ -204,7 +127,7 @@ type
     k_   : word;          //Parámetro Literal. Válido solo en algunas instrucciones.
   private //Campos para procesar instrucciones
     FMaxFlash: integer;
-    function GetBank(i : Longint): TPICBaseRAMBank;
+    function GetBank(i : Longint): TPICRAMBank;
     function GetINTCON: byte;
     function GetINTCON_GIE: boolean;
     function GetPage(i : Longint): TPICBaseFlashPage;
@@ -234,7 +157,7 @@ type
     TRISB    : byte;   //In Baseline PICs, this register is internal (Only exists for some devices)
     TRISC    : byte;   //In Baseline PICs, this register is internal (Only exists for some devices)
     BSR      : byte;   //In Baseline PICs, this register is internal (Only exists for some devices)
-    pines    : array[1..PIC_MAX_PINES] of TPICBasePin;
+    pines    : array[1..PIC_MAX_PINES] of TPICPin;
     property STATUS: byte read GetSTATUS;
     property STATUS_Z: boolean read GetSTATUS_Z write SetSTATUS_Z;
     property STATUS_C: boolean read GetSTATUS_C write SetSTATUS_C;
@@ -255,29 +178,24 @@ type
     procedure Reset;
     procedure AddBreakopint(pc: word);
     procedure ToggleBreakopint(pc: word);
-  public
-    //memorias
+  public   //Memorias
     flash    : TPICBaseFlash;   //memoria Flash
     ram      : TPICBaseRam;     //memoria RAM
-    Model    : string;    //modelo de PIC
-    Npins    : byte;      //número de pines
-    frequen  : integer;   //frecuencia del reloj
-    MaxFreq  : integer;   //máxima frecuencia del reloj
     //Propiedades que definen la arquitectura del PIC destino.
     NumBanks: byte;      //Número de bancos de RAM.
     NumPages: byte;      //Número de páginas de memoria Flash.
-    bank0, bank1, bank2, bank3: TPICBaseRAMBank;  //bancos de memoria RAM
+    bank0, bank1, bank2, bank3: TPICRAMBank;  //bancos de memoria RAM
     page0, page1, page2, page3: TPICBaseFlashPage;  //páginas de memoria Flash
     iFlash: integer;   //puntero a la memoria Flash, para escribir
     MsjError: string;
     procedure Decode(const opCode: word);  //decodifica instrucción
     function Disassembler(const opCode: word; bankNum: byte = 255;
       useVarName: boolean = false): string;  //Desensambla la instrucción actual
-    property banks[i : Longint]: TPICBaseRAMBank Read GetBank;
+    property banks[i : Longint]: TPICRAMBank Read GetBank;
     property pages[i : Longint]: TPICBaseFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
                          implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
-    //Funciones para la memoria RAM
+  public  //Funciones para la memoria RAM
     function HaveConsecGPR(const i, n: word; maxRam: word): boolean; //Indica si hay "n" bytes libres
     procedure UseConsecGPR(const i, n: word);  //Ocupa "n" bytes en la posición "i"
     function GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;
@@ -289,12 +207,12 @@ type
     function ValidRAMaddr(addr: word): boolean;  //indica si una posición de memoria es válida
     procedure ClearMemRAM;
     procedure DisableAllRAM;
-    procedure SetStatRAM(i1, i2: word; status0: TPICBaseCellState);
+    procedure SetStatRAM(i1, i2: word; status0: TPICCellState);
     procedure SetMappRAM(i1, i2: word; MappedTo: word);
     function SetStatRAMCom(strDef: string): boolean;
     function SetMappRAMCom(strDef: string): boolean;
     function MapRAMtoPIN(strDef: string): boolean;
-    procedure SetPin(pNumber: integer; pLabel: string; pType: TPICBasePinType);
+    procedure SetPin(pNumber: integer; pLabel: string; pType: TPICPinType);
     function SetUnimpBITS(strDef: string): boolean;
     function BankToAbsRAM(const offset, bank: byte): word; //devuelve dirección absoluta
     procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
@@ -304,12 +222,12 @@ type
     procedure SetNameRAM(const addr: word; const nam: string);  //Fija nombre a una celda de RAM
     procedure AddNameRAM(const addr: word; const bnk: byte; const nam: string);  //Agrega nombre a una celda de RAM
     procedure SetNameRAMbit(const addr: word; const bit: byte; const nam: string);  //Fija nombre a un bitde RAM
-    //funciones para la memoria Flash
+  public  //Funciones para la memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
     procedure ClearMemFlash;
     procedure SetSharedUnused;
     procedure SetSharedUsed;
-    //Métodos para codificar instrucciones de acuerdo a la sintaxis
+  public  //Métodos para codificar instrucciones de acuerdo a la sintaxis
     procedure useFlash;
     procedure codAsmFD(const inst: TPICBaseInst; const f: word; d: TPICBaseDestin);
     procedure codAsmF(const inst: TPICBaseInst; const f: word);
@@ -319,7 +237,8 @@ type
     procedure codAsm(const inst: TPICBaseInst);
     procedure codGotoAt(iflash0: integer; const k: word);
     procedure codCallAt(iflash0: integer; const k: word);
-    //Métodos adicionales
+    function codInsert(iflash0, nInsert, nWords: integer): boolean;
+  public  //Métodos adicionales
     function FindOpcode(Op: string; var syntax: string): TPICBaseInst;  //busca Opcode
     procedure addTopLabel(lbl: string);  //Add a comment to the ASM code
     procedure addTopComm(comm: string; replace: boolean = true);  //Add a comment to the ASM code
@@ -327,8 +246,8 @@ type
     procedure addPosInformation(rowSrc, colSrc: word; idFile: byte);
     procedure GenHex(hexFile: string; ConfigWord: integer = - 1);  //genera un archivo hex
     procedure DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);  //vuelva en código que contiene
-  public
-    constructor Create;
+  public  //Initialization
+    constructor Create; override;
     destructor Destroy; override;
   end;
 
@@ -340,64 +259,8 @@ var  //variables globales
 
 implementation
 
-{ TPICBasePin }
-function TPICBasePin.GetLabel: string;
-{Devuelve una etiqueta para el pin}
-begin
-  case typ of
-  pptUnused: Result := 'NC';
-  else
-    Result := nam;
-  end;
-end;
-{ TPICBaseRamCell }
-function TPICBaseRamCell.Getused: byte;
-begin
-  if mappedTo = nil then begin
-    //Celda independiente
-    Result := Fused;
-  end else begin
-    //Celda reflejada. Leemos la disponibilidad, de la celda origen.
-    Result := mappedTo^.used;
-  end;
-end;
-procedure TPICBaseRamCell.Setused(AValue: byte);
-begin
-  if mappedTo = nil then begin
-    //Celda independiente
-    Fused := AValue;
-  end else begin
-    //Celda reflejada. Escribimos la disponibilidad, en la celda origen.
-    mappedTo^.used := AValue;
-  end;
-end;
-function TPICBaseRamCell.Getvalue: byte;
-begin
-  if mappedTo = nil then begin
-    //Celda independiente
-    Result := Fvalue;
-  end else begin
-    //Celda reflejada. Leemos la disponibilidad, de la celda origen.
-    Result := mappedTo^.Fvalue;
-  end;
-end;
-procedure TPICBaseRamCell.Setvalue(AValue: byte);
-begin
-  if mappedTo = nil then begin
-    //Celda independiente
-    Fvalue := AValue;
-  end else begin
-    //Celda reflejada. Escribimos la disponibilidad, en la celda origen.
-    mappedTo^.Fvalue:= AValue;
-  end;
-end;
-function TPICBaseRamCell.AvailGPR: boolean;
-{Indica si el registro es una dirección disponible en la memoria RAM.}
-begin
-  Result := (state = cs_impleGPR) and (mappedTo = nil);
-end;
-{ TPICBaseRAMBank }
-//procedure TPICBaseRAMBank.Setmem(i: byte; AValue: TPICBaseRamCellPtr);
+{ TPICRAMBank }
+//procedure TPICRAMBank.Setmem(i: byte; AValue: TPICRamCellPtr);
 ////Escribe en un banco de memoria
 //begin
 //  //Se asume que i debe ser menor que $7F
@@ -408,7 +271,7 @@ end;
 //    ram^[i+AddrStart] := AValue;
 //  end;
 //end;
-procedure TPICBaseRAMBank.Init(num: byte; AddrStart0: word;
+procedure TPICRAMBank.Init(num: byte; AddrStart0: word;
   ram0: TPICBaseRamPtr);
 begin
   numBank := num;
@@ -416,12 +279,12 @@ begin
   ramPtr       :=ram0;
 end;
 { TPICBaseFlashPage }
-function TPICBaseFlashPage.Getmem(i: word): TPICBaseFlashCell;
+function TPICBaseFlashPage.Getmem(i: word): TPICFlashCell;
 begin
   //Se asume que i debe ser menor que $800
   Result := flash^[i+AddrStart];
 end;
-procedure TPICBaseFlashPage.Setmem(i: word; AValue: TPICBaseFlashCell);
+procedure TPICBaseFlashPage.Setmem(i: word; AValue: TPICFlashCell);
 begin
   flash^[i+AddrStart] := AValue;
 end;
@@ -551,7 +414,22 @@ actual. Se usa para completar llamadas indefinidas}
 begin
   flash[iFlash0].value := %100100000000 + (k and %11111111);
 end;
-
+function TPICBase.codInsert(iflash0, nInsert, nWords: integer): boolean;
+{Inserta en la posición iflash0, "nInsert" palabras, desplazando "nWords" palabras.
+Al final debe quedar "nInsert" palabras de espacio libre en iflash0.
+Si hay error devuelve FALSE.}
+var
+  i: Integer;
+begin
+  Result := True;  //By default
+  if iFlash+nInsert+nWords-1> MaxFlash then begin
+    //Overflow on address
+    exit(false);
+  end;
+  for i:= iflash + nInsert + nWords -1 downto iFlash + nWords do begin
+    flash[i] := flash[i-nInsert];
+  end;
+end;
 function TPICBase.FindOpcode(Op: string; var syntax: string): TPICBaseInst;
 {Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
  el identificador de instrucción y una cadena que representa a la sintaxis en "syntax".
@@ -611,58 +489,6 @@ begin
   flash[iFlash].colSrc := colSrc;
   flash[iFlash].idFile := idFile;
 end;
-//Creación de archivo *.hex
-function TPICBase.HexChecksum(const lin:string): string;
-//Devuelve los caracteres en hexadecimal del Checksum, para el archivo *.hex
-var
-  i: Integer;
-  chk: Integer;
-  part: String;
-begin
-   i:=1;
-   chk := 0;
-   while i<length(lin) do begin
-     part := copy(lin,i,2);
-     chk := chk + StrToInt('$'+part);
-     inc(i,2);
-   end;
-   chk := not chk;  //complemento a 1
-   inc(chk);        //complemento a 2
-   part := IntToHex(chk,4);  //a hexadecimal
-   Result := copy(part, length(part)-1,2);  //recorta
-end;
-procedure TPICBase.GenHexComm(comment: string);
-//Agrega una línea de comentario al archivo *.hex
-begin
-  hexLines.Add(';'+comment);
-end;
-procedure TPICBase.GenHexExAdd(Data: word);
-//Agrega una línea de Extended Address al archivo *.hex
-const RecordType = '04';
-var
-  ByteCount: Integer;
-  lin: String;
-begin
-  ByteCount := 2;
-  lin:= IntToHex(ByteCount,2) + '0000' + RecordType +  IntToHex(Data,4);
-  hexLines.Add(':' + lin + HexChecksum(lin));
-end;
-procedure TPICBase.GenHexData(Address: word; Data: string);
-//Agrega una línea de datos al archivo *.hex
-const RecordType = '00';
-var
-  ByteCount: Integer;
-  lin: String;
-begin
-  ByteCount := length(data) div 2;
-  lin:= IntToHex(ByteCount,2) + IntToHex(Address*2,4) + RecordType +  Data;
-  hexLines.Add(':'+lin + HexChecksum(lin));
-end;
-procedure TPICBase.GenHexEOF;
-//Agrega una línea de Extended Address al archivo *.hex
-begin
-  hexLines.Add(':00000001FF');
-end;
 function  TPICBase.StrHexFlash(i1, i2: integer): string;
 {Devuelve la cadena, de bytes hexadecimales de la memoria Flash, desde la posición
  i1 hasta i2.}
@@ -677,7 +503,7 @@ begin
   end;
 end;
 //Campos para procesar instrucciones
-function TPICBase.GetBank(i : Longint): TPICBaseRAMBank;
+function TPICBase.GetBank(i : Longint): TPICRAMBank;
 begin
   case i of
   0: Result := bank0;
@@ -701,56 +527,56 @@ begin
 end;
 function TPICBase.GetSTATUS: byte;
 begin
-  Result := ram[$03].Fvalue;
+  Result := ram[$03].value;
 end;
 function TPICBase.GetSTATUS_Z: boolean;
 begin
-  Result := (ram[$03].Fvalue and %00000100) <> 0;
+  Result := (ram[$03].dvalue and %00000100) <> 0;
 end;
 procedure TPICBase.SetSTATUS_Z(AValue: boolean);
 begin
-  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000100
-            else ram[$03].Fvalue := ram[$03].Fvalue and %11111011;
+  if AVAlue then ram[$03].dvalue := ram[$03].dvalue or  %00000100
+            else ram[$03].dvalue := ram[$03].dvalue and %11111011;
 end;
 function TPICBase.GetSTATUS_C: boolean;
 begin
-  Result := (ram[$03].Fvalue and %00000001) <> 0;
+  Result := (ram[$03].dvalue and %00000001) <> 0;
 end;
 procedure TPICBase.SetSTATUS_C(AValue: boolean);
 begin
-  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000001
-            else ram[$03].Fvalue := ram[$03].Fvalue and %11111110;
+  if AVAlue then ram[$03].dvalue := ram[$03].dvalue or  %00000001
+            else ram[$03].dvalue := ram[$03].dvalue and %11111110;
 end;
 function TPICBase.GetSTATUS_DC: boolean;
 begin
-  Result := (ram[$03].Fvalue and %00000010) <> 0;
+  Result := (ram[$03].dvalue and %00000010) <> 0;
 end;
 procedure TPICBase.SetSTATUS_DC(AValue: boolean);
 begin
-  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %00000010
-            else ram[$03].Fvalue := ram[$03].Fvalue and %11111101;
+  if AVAlue then ram[$03].dvalue := ram[$03].dvalue or  %00000010
+            else ram[$03].dvalue := ram[$03].dvalue and %11111101;
 end;
 function TPICBase.GetSTATUS_IRP: boolean;
 begin
-  Result := (ram[$03].Fvalue and %10000000) <> 0;
+  Result := (ram[$03].dvalue and %10000000) <> 0;
 end;
 procedure TPICBase.SetSTATUS_IRP(AValue: boolean);
 begin
-  if AVAlue then ram[$03].Fvalue := ram[$03].Fvalue or  %10000000
-            else ram[$03].Fvalue := ram[$03].Fvalue and %01111111;
+  if AVAlue then ram[$03].dvalue := ram[$03].dvalue or  %10000000
+            else ram[$03].dvalue := ram[$03].dvalue and %01111111;
 end;
 function TPICBase.GetINTCON: byte;
 begin
-  Result := ram[$0B].Fvalue;
+  Result := ram[$0B].dvalue;
 end;
 function TPICBase.GetINTCON_GIE: boolean;
 begin
-  Result := (ram[$0B].Fvalue and %10000000) <> 0;
+  Result := (ram[$0B].dvalue and %10000000) <> 0;
 end;
 procedure TPICBase.SetINTCON_GIE(AValue: boolean);
 begin
-  if AVAlue then ram[$0B].Fvalue := ram[$0B].Fvalue or  %10000000
-            else ram[$0B].Fvalue := ram[$0B].Fvalue and %01111111;
+  if AVAlue then ram[$0B].dvalue := ram[$0B].dvalue or  %10000000
+            else ram[$0B].dvalue := ram[$0B].dvalue and %01111111;
 end;
 procedure TPICBase.SetMaxFlash(AValue: integer);
 begin
@@ -774,14 +600,14 @@ begin
   lectura o escritura, pero se prefiere hacerlo en escritura, porque se espera que se
   hagan menos operaciones de escritura que lectura.}
   case BSR and %111 of
-  %000: ram[f_                ].value := value and ram[f_                ].Fimplem;
-  %001: ram[f_+PIC_BANK_SIZE  ].value := value and ram[f_+PIC_BANK_SIZE  ].Fimplem;
-  %010: ram[f_+PIC_BANK_SIZE*2].value := value and ram[f_+PIC_BANK_SIZE*2].Fimplem;
-  %011: ram[f_+PIC_BANK_SIZE*3].value := value and ram[f_+PIC_BANK_SIZE*3].Fimplem;
-  %100: ram[f_+PIC_BANK_SIZE*4].value := value and ram[f_+PIC_BANK_SIZE*4].Fimplem;
-  %101: ram[f_+PIC_BANK_SIZE*5].value := value and ram[f_+PIC_BANK_SIZE*5].Fimplem;
-  %110: ram[f_+PIC_BANK_SIZE*6].value := value and ram[f_+PIC_BANK_SIZE*6].Fimplem;
-  %111: ram[f_+PIC_BANK_SIZE*7].value := value and ram[f_+PIC_BANK_SIZE*7].Fimplem;
+  %000: ram[f_                ].value := value and ram[f_                ].dimplem;
+  %001: ram[f_+PIC_BANK_SIZE  ].value := value and ram[f_+PIC_BANK_SIZE  ].dimplem;
+  %010: ram[f_+PIC_BANK_SIZE*2].value := value and ram[f_+PIC_BANK_SIZE*2].dimplem;
+  %011: ram[f_+PIC_BANK_SIZE*3].value := value and ram[f_+PIC_BANK_SIZE*3].dimplem;
+  %100: ram[f_+PIC_BANK_SIZE*4].value := value and ram[f_+PIC_BANK_SIZE*4].dimplem;
+  %101: ram[f_+PIC_BANK_SIZE*5].value := value and ram[f_+PIC_BANK_SIZE*5].dimplem;
+  %110: ram[f_+PIC_BANK_SIZE*6].value := value and ram[f_+PIC_BANK_SIZE*6].dimplem;
+  %111: ram[f_+PIC_BANK_SIZE*7].value := value and ram[f_+PIC_BANK_SIZE*7].dimplem;
   end;
 end;
 function TPICBase.GetFRAM: byte;
@@ -1171,7 +997,7 @@ begin
   Decode(val);   //decodifica instrucción
   Result := idIns;
 end;
-procedure TPICBase.Exec;
+procedure TPICBase.Exec();
 {Executa la instrucción actual}
 var
   pc: word;
@@ -1625,9 +1451,9 @@ begin
   CommStop := false;  //Limpia bandera
   //Limpia solamente el valor inicial, no toca los otros campos
   for i:=0 to high(ram) do begin
-    ram[i].Fvalue := $00;
+    ram[i].dvalue := $00;
   end;
-  ram[$03].Fvalue := %00011000;  //STATUS
+  ram[$03].dvalue := %00011000;  //STATUS
 end;
 procedure TPICBase.AddBreakopint(pc: word);
 //Agrega un punto de interrupción
@@ -1810,7 +1636,7 @@ var
   i: Integer;
 begin
   for i:=0 to high(ram) do begin
-    ram[i].Fvalue := $00;
+    ram[i].dvalue := $00;
     ram[i].used := 0;
     ram[i].name:='';
     ram[i].shared := 0;
@@ -1865,14 +1691,14 @@ begin
     ram[i].addr     := i;
     ram[i].state    := cs_unimplem;
     ram[i].mappedTo := nil;
-    ram[i].Fimplem  := $FF;  //Todos implementados, por defecto
+    ram[i].dimplem  := $FF;  //Todos implementados, por defecto
   end;
   //Inicia estado de pines
   for i:=1 to high(pines) do begin
     pines[i].typ := pptUnused;
   end;
 end;
-procedure TPICBase.SetStatRAM(i1, i2: word; status0: TPICBaseCellState);
+procedure TPICBase.SetStatRAM(i1, i2: word; status0: TPICCellState);
 {Inicia el campo State, de la memoria. Permite definir el estado real de la memoria RAM.
 }
 var
@@ -1907,7 +1733,7 @@ Si hay error, devuelve FALSE, y el mensaje de error en MsjError.
 var
   coms: TStringList;
   add1, add2: longint;
-  state: TPICBaseCellState;
+  state: TPICCellState;
   staMem, com, str: String;
 begin
   Result := true;
@@ -2098,7 +1924,7 @@ begin
     coms.Destroy;
   end;
 end;
-procedure TPICBase.SetPin(pNumber: integer; pLabel: string; pType: TPICBasePinType);
+procedure TPICBase.SetPin(pNumber: integer; pLabel: string; pType: TPICPinType);
 begin
   if pNumber>PIC_MAX_PINES then exit;
   pines[pNumber].nam := pLabel;
@@ -2145,7 +1971,7 @@ begin
       end;
       mskBitsN := n;  //Se supone que nunca será > 255
       //Ya se tienen los parámetros, para definir el mapeo
-      ram[add1].Fimplem := mskBitsN;
+      ram[add1].dimplem := mskBitsN;
     end;
   finally
     coms.Destroy;
@@ -2355,9 +2181,7 @@ end;
 constructor TPICBase.Create;
 begin
   inherited Create;
-  hexLines := TStringList.Create;
   //configuración de hardware por defecto
-  frequen := 4000000;    //4MHz
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
   MaxFlash := PIC_PAGE_SIZE;  //En algunos casos, puede ser menor al tamaño de una página
@@ -2380,7 +2204,6 @@ begin
 end;
 destructor TPICBase.Destroy;
 begin
-  hexLines.Destroy;
   inherited Destroy;
 end;
 
@@ -2474,4 +2297,4 @@ end;
 initialization
   InitTables;
 end.
-
+//2485

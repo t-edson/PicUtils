@@ -117,7 +117,7 @@ begin
     end;
     //find mnemonic, and syntax
     idInst := pic.FindOpcode(Inst, stx);
-    if idInst = _Inval then begin
+    if idInst = i_Inval then begin
       Application.MessageBox(PChar('Invalid Opcode: '+ Inst),'');
       exit;
     end;

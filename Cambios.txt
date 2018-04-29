@@ -1,7 +1,11 @@
 1.4
 ===
 Se cambian los nombres de algunos tipos en Pic16Utils.pas
+Se agrega el método TPIC16.codInsert().
 Se incluyen unidades nuevas para definir a los PIC del la linea "Baseline".
+Se crea la unidad PicCore, para incluir definiciones comunes a todos los núcleos 
+de PIC.
+Se cambia el nombre de los identificadores de TPIC16Inst.
 
 
 1.3

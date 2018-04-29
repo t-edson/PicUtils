@@ -2,7 +2,7 @@ unit Pic16Devices;
 {$mode objfpc}{$H+}
 interface
 uses
-  Classes, SysUtils , Pic16Utils;
+  Classes, SysUtils , PicCore, Pic16Utils;
 
 procedure GetSupportedDevices(list: TStrings);
 function GetHardwareInfo(pic: TPIC16; model: string): boolean;
