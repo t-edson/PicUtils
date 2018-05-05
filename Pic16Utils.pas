@@ -237,7 +237,7 @@ type
     function codInsert(iflash0, nInsert, nWords: integer): boolean;
     procedure BTFSC_sw_BTFSS(iflash0: integer);
   public  //Métodos adicionales
-    function FindOpcode(Op: string; var syntax: string): TPIC16Inst;  //busca Opcode
+    function FindOpcode(Op: string; out syntax: string): TPIC16Inst;  //busca Opcode
     procedure addTopLabel(lbl: string);  //Add a comment to the ASM code
     procedure addTopComm(comm: string; replace: boolean = true);  //Add a comment to the ASM code
     procedure addSideComm(comm: string; before: boolean); //Add lateral comment to the ASM code
@@ -433,7 +433,7 @@ begin
   //Solo necesita cambiar el bit apropiado
   flash[iFlash0].value := flash[iFlash0].value XOR %10000000000;
 end;
-function TPIC16.FindOpcode(Op: string; var syntax: string): TPIC16Inst;
+function TPIC16.FindOpcode(Op: string; out syntax: string): TPIC16Inst;
 {Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
  el identificador de instrucción y una cadena que representa a la sintaxis en "syntax".
  Si no encuentra devuelve "i_Inval". }

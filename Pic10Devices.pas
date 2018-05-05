@@ -2,10 +2,10 @@ unit Pic10Devices;
 {$mode objfpc}{$H+}
 interface
 uses
-  Classes, SysUtils , Pic16Utils;
+  Classes, SysUtils , PicCore, Pic10Utils;
 
 procedure GetSupportedDevices(list: TStrings);
-function GetHardwareInfo(pic: TPIC16; model: string): boolean;
+function GetHardwareInfo(pic: TPIC10; model: string): boolean;
 
 implementation
 
@@ -47,7 +47,7 @@ begin
    list.Add('PIC16F628A');
    list.Add('PIC16F648A');
 end;
-function GetHardwareInfo(pic: TPIC16; model: string): boolean;
+function GetHardwareInfo(pic: TPIC10; model: string): boolean;
 {Obtiene información parra un modelo de PIC en especial. Si no lo encuentra, devuelve
  FALSE}
 begin
