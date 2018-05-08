@@ -1,17 +1,13 @@
-{PIC16Utils
-
-Descripción
+{
+Description
 ===========
-Unidad con utilidades para la programación de microcontroladores PIC de rango
-medio con instrucciones de 14 bits. Incluye a la mayoría de la serie
-PIC16FXXXX.
-Esta unidad trabaja con tamaños de página de 2K y tamaños de bancos de 128 bytes.
-Se define un objeto que representa a un PIC de esta serie, que está dimensionado
-para poder representar al dispositivo más complejo.
-El objetivo de esta unidad es poder servir como base para la implementación de
-ensambladores, compiladores o hasta simuladores.
+Utilities for programming Mid-range PIC microcontrollers with 14 bits instructions.
+Include most of the PIC16 devices.
+This unit works with 2K words pages and 128 bytes RAM banks.
+The main class TPIC16 must model all devices of this family, including the most complex.
+The aim of this unit is to be used as base for assemblers, compilers and simulators.
 
-                                         Creado por Tito Hinostroza   26/07/2015
+                                         Created by Tito Hinostroza   26/07/2015
 }
 
 unit Pic16Utils;
@@ -20,11 +16,11 @@ interface
 uses
   Classes, SysUtils, LCLProc, PicCore;
 const
-  PIC_BANK_SIZE = 128;  //Tamaño del banco de RAM
-  PIC_MAX_RAM   = PIC_BANK_SIZE * 4;  //Máxima cantidad de memoria RAM
+  PIC_BANK_SIZE = 128;               //RAM bank size
+  PIC_MAX_RAM   = PIC_BANK_SIZE * 4; //Máx RAM memory (4 banks)
   PIC_PAGE_SIZE = 2048;
-  PIC_MAX_FLASH = PIC_PAGE_SIZE * 4; //Máxima cantidad de memoria Flash
-  PIC_MAX_PINES = 64;   //Máxima cantidad de pines para el encapsulado
+  PIC_MAX_FLASH = PIC_PAGE_SIZE * 4; //Máx Flash memeory (4 pages)
+  PIC_MAX_PINES = 64;                //Max. number of pines for the package
 type  //Mid-range PIC instructions
   TPIC16Inst = (
     //BYTE-ORIENTED FILE REGISTER OPERATIONS
@@ -75,43 +71,14 @@ type  //Mid-range PIC instructions
   );
 
 
-type //Modelo de la memoria RAM
+type //Models for RAM memory
   TPIC16Ram = array[0..PIC_MAX_RAM-1] of TPICRamCell;
   TPIC16RamPtr = ^TPIC16Ram;
   TPIC16RutExplorRAM = procedure(offs, bnk: byte; regPtr: TPICRamCellPtr) of object;
-  {Representa a un banco de memoria del PIC. En un banco las direcciones de memoria
-   se mapean siempre desde $00 hasta $7F. No almacenan datos, solo usan referencias.}
-  { TPICRAMBank }
-  TPICRAMBank = object
-  public
-    numBank   : integer;       //Número de banco
-    ramPtr    : TPIC16RamPtr;  //Puntero a memoria RAM
-    AddrStart : word;          //dirección de inicio en la memoria RAM total
-  public
-    procedure Init(num: byte; AddrStart0: word; ram0: TPIC16RamPtr);  //inicia objeto
-  end;
 
 type  //Models for Flash memory
   TPIC16Flash = array[0..PIC_MAX_FLASH-1] of TPICFlashCell;
   TPIC16FlashPtr = ^TPIC16Flash;
-
-  {Representa a una página de memoria del PIC. En una página las direcciones de memoria
-   se mapean siempre desde $000 hasta $800. No almacenan datos, solo usan referencias.}
-  TPIC16FlashPagePtr = ^TPIC16FlashPage;
-  { TPIC16FlashPage }
-  TPIC16FlashPage = object
-  private
-    flash    : TPIC16FlashPtr;  //puntero a memoria Flash
-    AddrStart: word;           //dirección de inicio en la memoria flash total
-  private
-    function Getmem(i : word): TPICFlashCell;
-    procedure Setmem(i : word; AValue: TPICFlashCell);
-  public
-    procedure Init(AddrStart0: word; flash0: TPIC16FlashPtr);  //inicia objeto
-    property mem[i : word] : TPICFlashCell read Getmem write Setmem;
-    //funciones para administración de la memoria
-    function Total: word; //total de bytes que contiene
-  end;
 
 type
   {Objeto que representa al hardware de un PIC de la serie 16}
@@ -132,7 +99,7 @@ type
     function GetBank(i : Longint): TPICRAMBank;
     function GetINTCON: byte;
     function GetINTCON_GIE: boolean;
-    function GetPage(i : Longint): TPIC16FlashPage;
+    function GetPage(i : Longint): TPICFlashPage;
     function GetSTATUS: byte;
     function GetSTATUS_C: boolean;
     function GetSTATUS_DC: boolean;
@@ -178,18 +145,13 @@ type
   public    //Memorias
     flash    : TPIC16Flash;   //memoria Flash
     ram      : TPIC16Ram;     //memoria RAM
-    //Propiedades que definen la arquitectura del PIC destino.
-    NumBanks: byte;      //Número de bancos de RAM.
-    NumPages: byte;      //Número de páginas de memoria Flash.
-    bank0, bank1, bank2, bank3: TPICRAMBank;  //bancos de memoria RAM
-    page0, page1, page2, page3: TPIC16FlashPage;  //páginas de memoria Flash
     iFlash: integer;   //puntero a la memoria Flash, para escribir
     MsjError: string;
     procedure Decode(const opCode: word);  //decodifica instrucción
     function Disassembler(const opCode: word; bankNum: byte = 255;
       useVarName: boolean = false): string;  //Desensambla la instrucción actual
     property banks[i : Longint]: TPICRAMBank Read GetBank;
-    property pages[i : Longint]: TPIC16FlashPage Read GetPage;
+    property pages[i : Longint]: TPICFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
                          implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
   public  //Funciones para la memoria RAM
@@ -214,7 +176,7 @@ type
     function BankToAbsRAM(const offset, bank: byte): word; //devuelve dirección absoluta
     procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
     //Funciones para manejo de nombres
-    function NameRAM(const addr: word; const bnk: byte): string;
+    function NameRAM(const addr: word): string;
     function NameRAMbit(const addr: word; const bnk,bit: byte): string;
     procedure SetNameRAM(const addr: word; const nam: string);  //Fija nombre a una celda de RAM
     procedure AddNameRAM(const addr: word; const bnk: byte; const nam: string);  //Agrega nombre a una celda de RAM
@@ -256,45 +218,6 @@ var  //variables globales
   PIC16InstSyntax: array[low(TPIC16Inst)..high(TPIC16Inst)] of string[5];
 
 implementation
-
-{ TPICRAMBank }
-//procedure TPICRAMBank.Setmem(i: byte; AValue: TPICRamCellPtr);
-////Escribe en un banco de memoria
-//begin
-//  //Se asume que i debe ser menor que $7F
-//  if ram^[i+AddrStart].state = cs_mapToBnk then begin
-//    //estas direcciones están mapeadas en otro banco
-//    BankMapped^.mem[i] := AValue;
-//  end else begin  //caso normal
-//    ram^[i+AddrStart] := AValue;
-//  end;
-//end;
-procedure TPICRAMBank.Init(num: byte; AddrStart0: word;
-  ram0: TPIC16RamPtr);
-begin
-  numBank := num;
-  AddrStart :=AddrStart0;
-  ramPtr       :=ram0;
-end;
-{ TPIC16FlashPage }
-function TPIC16FlashPage.Getmem(i: word): TPICFlashCell;
-begin
-  //Se asume que i debe ser menor que $800
-  Result := flash^[i+AddrStart];
-end;
-procedure TPIC16FlashPage.Setmem(i: word; AValue: TPICFlashCell);
-begin
-  flash^[i+AddrStart] := AValue;
-end;
-procedure TPIC16FlashPage.Init(AddrStart0: word; flash0: TPIC16FlashPtr);
-begin
-  AddrStart :=AddrStart0;
-  flash     :=flash0;
-end;
-function TPIC16FlashPage.Total: word;
-begin
-  Result := PIC_PAGE_SIZE;  //tamaño fijo
-end;
 
 { TPIC16 }
 procedure TPIC16.useFlash;
@@ -508,25 +431,13 @@ end;
 //Campos para procesar instrucciones
 function TPIC16.GetBank(i : Longint): TPICRAMBank;
 begin
-  case i of
-  0: Result := bank0;
-  1: Result := bank1;
-  2: Result := bank2;
-  3: Result := bank3;
-  else
-    Result := bank0;
-  end;
+  Result.AddrStart := i*PIC_BANK_SIZE;
+  Result.AddrEnd   := (i+1)*PIC_BANK_SIZE-1;
 end;
-function TPIC16.GetPage(i: Longint): TPIC16FlashPage;
+function TPIC16.GetPage(i: Longint): TPICFlashPage;
 begin
-  case i of
-  0: Result := page0;
-  1: Result := page1;
-  2: Result := page2;
-  3: Result := page3;
-  else
-    Result := page0;
-  end;
+  Result.AddrStart := i*PIC_PAGE_SIZE;
+  Result.AddrEnd   := (i+1)*PIC_PAGE_SIZE-1;
 end;
 function TPIC16.GetSTATUS: byte;
 begin
@@ -946,7 +857,7 @@ function TPIC16.CurInstruction: TPIC16Inst;
 var
   val: Word;
 begin
-  val := flash[PCH*256+PCL].value; // page0.mem[PCL].value;
+  val := flash[PCH*256+PCL].value;
   Decode(val);   //decodifica instrucción
   Result := idIns;
 end;
@@ -971,7 +882,7 @@ var
   resInt : integer;
 begin
   //Decodifica instrucción
-  opc := flash[pc].value; // page0.mem[PCL].value;
+  opc := flash[pc].value;
   Decode(opc);   //decodifica instrucción
   case idIns of
   i_ADDWF: begin
@@ -1662,6 +1573,7 @@ var
   i: Integer;
 begin
   for i:=i1 to i2 do begin  //verifica 1 a 1, por seguridad
+    if i>PIC_MAX_RAM-1 then continue;  //protection
     ram[i].state := status0;
   end;
 end;
@@ -1673,6 +1585,7 @@ var
   i: Integer;
 begin
   for i:= i1 to i2 do begin  //verifica 1 a 1, por seguridad
+    if i>PIC_MAX_RAM-1 then continue;  //protection
     ram[i].mappedTo := @ram[MappedTo];
     inc(MappedTo)
   end;
@@ -1945,10 +1858,10 @@ begin
    offset := AbsAddr and %01111111;
    bank :=  AbsAddr >> 7;
 end;
-function TPIC16.NameRAM(const addr: word; const bnk: byte): string;
+function TPIC16.NameRAM(const addr: word): string;
 {Devuelve el nombre de una celda de la memoria RAM.}
 begin
-  Result := ram[BankToAbsRAM(addr, bnk)].name;
+  Result := ram[addr].name;
 end;
 function TPIC16.NameRAMbit(const addr: word; const bnk, bit: byte): string;
 begin
@@ -2142,18 +2055,9 @@ begin
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
   MaxFlash := PIC_PAGE_SIZE;  //En algunos casos, puede ser menor al tamaño de una página
-  bank0.Init(0, $000, @ram);
-  bank1.Init(1, $080, @ram);
-  bank2.Init(2, $100, @ram);
-  bank3.Init(3, $180, @ram);
   //inicia una configuración común
   ClearMemRAM;
   SetStatRAM($020, $04F, cs_impleGPR);
-
-  page0.Init($0000          , @flash);
-  page1.Init(1*PIC_PAGE_SIZE, @flash);
-  page2.Init(2*PIC_PAGE_SIZE, @flash);
-  page3.Init(3*PIC_PAGE_SIZE, @flash);
 
   //estado inicial
   iFlash := 0;   //posición de inicio

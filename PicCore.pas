@@ -1,7 +1,7 @@
 {PICCore
 
-Contains basica definitions applicable to all PIC microcontroller Cores
-                                         CReated by Tito Hinostroza   28/04/2018
+Contains basic definitions applicable to all PIC microcontroller Cores
+                                         Created by Tito Hinostroza   28/04/2018
 }
 unit PicCore;
 {$mode objfpc}{$H+}
@@ -10,10 +10,17 @@ uses
   Classes, SysUtils, LCLProc;
 type
   TPICCellState = (
-     cs_impleSFR,   //Registros de funciones especiales. Habilitado para uso.
-     cs_impleGPR,   //Registros de uso general. Habilitado para uso.
-     cs_unimplem   //No implementado
+     cs_impleSFR,   //Special function Registers. Can be used.
+     cs_impleGPR,   //General Purpose Registers. Can be used.
+     cs_unimplem    //Not implemented.
   );
+
+  { TPICRAMBank }
+  {Represent a RAM memory bank of the PIC. }
+  TPICRAMBank = object
+    AddrStart : word;     //Address start of RAM bank
+    AddrEnd   : word;     //Address end of RAM bank
+  end;
 
   { TPICRamCell }
   {Modela a una dirección lógica de la memoria RAM. Se ha taratdo de hacer una
@@ -64,6 +71,13 @@ type
     {Be careful on the size of this record, because it's going to be multiplied by 8192}
   end;
 
+  { TPICFlashPage }
+  {Represent a PIC memory page.}
+  TPICFlashPage = object
+    AddrStart : word;     //Address start of FLASH bank
+    AddrEnd   : word;     //Address end of FLASH bank
+  end;
+
   //Modelo para un pin físico del PIC
   TPICPinType = (
     pptVcc,    //Alimentación
@@ -83,7 +97,6 @@ type
     function GetLabel: string;
   end;
 
-
   { TPicCore }
   {Abcestor of all 8 bits PIC cores}
   TPicCore = class
@@ -92,6 +105,9 @@ type
     Npins    : byte;      //número de pines
     frequen  : integer;   //frecuencia del reloj
     MaxFreq  : integer;   //máxima frecuencia del reloj
+    //Propiedades que definen la arquitectura del PIC destino.
+    NumBanks: byte;      //Número de bancos de RAM.
+    NumPages: byte;      //Número de páginas de memoria Flash.
   protected  //Generation of HEX files
     hexLines : TStringList;  //Uusado para crear archivo *.hex
     function HexChecksum(const lin: string): string;

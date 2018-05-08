@@ -4,8 +4,10 @@ Description
 Utilities for programming Baseline PIC microcontrollers with 12 bits instructions.
 Include most of the PIC10 devices.
 This unit works with 512 words pages and 32 bytes RAM banks.
-The main class TPIC10 must model all devices of this serie.
+The main class TPIC10 must model all devices of this family, including the most complex.
+The aim of this unit is to be used as base for assemblers, compilers and simulators.
 
+                                         Created by Tito Hinostroza   26/04/2018
 }
 
 unit Pic10Utils;
@@ -14,11 +16,11 @@ interface
 uses
   Classes, SysUtils, LCLProc, PicCore;
 const
-  PIC_BANK_SIZE = 32;  //Tamaño del banco de RAM
-  PIC_MAX_RAM   = PIC_BANK_SIZE * 8;  //Máx RAM memory (8 banks)
+  PIC_BANK_SIZE = 32;                //RAM bank size
+  PIC_MAX_RAM   = PIC_BANK_SIZE * 8; //Máx RAM memory (8 banks)
   PIC_PAGE_SIZE = 512;
   PIC_MAX_FLASH = PIC_PAGE_SIZE * 4; //Máx Flash memeory (4 pages)
-  PIC_MAX_PINES = 28;   //Máxima cantidad de pines para el encapsulado
+  PIC_MAX_PINES = 28;                //Max. number of pines for the package
 type  //Baseline PIC instructions
   TPIC10Inst = (
     //BYTE-ORIENTED FILE REGISTER OPERATIONS
@@ -46,7 +48,6 @@ type  //Baseline PIC instructions
     i_BTFSC,
     i_BTFSS,
     //LITERAL AND CONTROL OPERATIONS
-    //i_ADDLW,
     i_ANDLW,
     i_CALL,
     i_CLRWDT,
@@ -55,11 +56,10 @@ type  //Baseline PIC instructions
     i_MOVLW,
     i_RETLW,
     i_SLEEP,
-    //i_SUBLW,
     i_XORLW,
     i_OPTION,
     i_TRIS,
-    //EXTENDED INSTRCUTIONS (Only for some Models)
+    //EXTENDED INSTRUCTIONS (Only for some Models)
     i_MOVLB,
     i_RETURN,
     i_RETFIE,
@@ -73,43 +73,14 @@ type  //Baseline PIC instructions
   );
 
 
-type //Modelo de la memoria RAM
-  TPICBaseRam = array[0..PIC_MAX_RAM-1] of TPICRamCell;
-  TPICBaseRamPtr = ^TPICBaseRam;
-  TPICBaseRutExplorRAM = procedure(offs, bnk: byte; regPtr: TPICRamCellPtr) of object;
-  {Representa a un banco de memoria del PIC. En un banco las direcciones de memoria
-   se mapean siempre desde $00 hasta $7F. No almacenan datos, solo usan referencias.}
-  { TPICRAMBank }
-  TPICRAMBank = object
-  public
-    numBank   : integer;       //Número de banco
-    ramPtr    : TPICBaseRamPtr;  //Puntero a memoria RAM
-    AddrStart : word;          //dirección de inicio en la memoria RAM total
-  public
-    procedure Init(num: byte; AddrStart0: word; ram0: TPICBaseRamPtr);  //inicia objeto
-  end;
+type //Models for RAM memory
+  TPIC10Ram = array[0..PIC_MAX_RAM-1] of TPICRamCell;
+  TPIC10RamPtr = ^TPIC10Ram;
+  TPIC10RutExplorRAM = procedure(offs, bnk: byte; regPtr: TPICRamCellPtr) of object;
 
 type  //Models for Flash memory
-  TPICBaseFlash = array[0..PIC_MAX_FLASH-1] of TPICFlashCell;
-  TPICBaseFlashPtr = ^TPICBaseFlash;
-
-  {Representa a una página de memoria del PIC. En una página las direcciones de memoria
-   se mapean siempre desde $000 hasta $800. No almacenan datos, solo usan referencias.}
-  TPICBaseFlashPagePtr = ^TPICBaseFlashPage;
-  { TPICBaseFlashPage }
-  TPICBaseFlashPage = object
-  private
-    flash    : TPICBaseFlashPtr;  //puntero a memoria Flash
-    AddrStart: word;           //dirección de inicio en la memoria flash total
-  private
-    function Getmem(i : word): TPICFlashCell;
-    procedure Setmem(i : word; AValue: TPICFlashCell);
-  public
-    procedure Init(AddrStart0: word; flash0: TPICBaseFlashPtr);  //inicia objeto
-    property mem[i : word] : TPICFlashCell read Getmem write Setmem;
-    //funciones para administración de la memoria
-    function Total: word; //total de bytes que contiene
-  end;
+  TPIC10Flash = array[0..PIC_MAX_FLASH-1] of TPICFlashCell;
+  TPIC10FlashPtr = ^TPIC10Flash;
 
 type
   {Objeto que representa al hardware de un PIC de la serie 10}
@@ -130,7 +101,7 @@ type
     function GetBank(i : Longint): TPICRAMBank;
     function GetINTCON: byte;
     function GetINTCON_GIE: boolean;
-    function GetPage(i : Longint): TPICBaseFlashPage;
+    function GetPage(i : Longint): TPICFlashPage;
     function GetSTATUS: byte;
     function GetSTATUS_C: boolean;
     function GetSTATUS_DC: boolean;
@@ -179,20 +150,15 @@ type
     procedure AddBreakopint(pc: word);
     procedure ToggleBreakopint(pc: word);
   public   //Memorias
-    flash    : TPICBaseFlash;   //memoria Flash
-    ram      : TPICBaseRam;     //memoria RAM
-    //Propiedades que definen la arquitectura del PIC destino.
-    NumBanks: byte;      //Número de bancos de RAM.
-    NumPages: byte;      //Número de páginas de memoria Flash.
-    bank0, bank1, bank2, bank3: TPICRAMBank;  //bancos de memoria RAM
-    page0, page1, page2, page3: TPICBaseFlashPage;  //páginas de memoria Flash
+    flash    : TPIC10Flash;   //memoria Flash
+    ram      : TPIC10Ram;     //memoria RAM
     iFlash: integer;   //puntero a la memoria Flash, para escribir
     MsjError: string;
     procedure Decode(const opCode: word);  //decodifica instrucción
     function Disassembler(const opCode: word; bankNum: byte = 255;
       useVarName: boolean = false): string;  //Desensambla la instrucción actual
     property banks[i : Longint]: TPICRAMBank Read GetBank;
-    property pages[i : Longint]: TPICBaseFlashPage Read GetPage;
+    property pages[i : Longint]: TPICFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
                          implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
   public  //Funciones para la memoria RAM
@@ -203,7 +169,7 @@ type
     function GetFreeBytes(const size: integer; var addr: word): boolean;  //obtiene una dirección libre
     function TotalMemRAM: word; //devuelve el total de memoria RAM
     function UsedMemRAM: word;  //devuelve el total de memoria RAM usada
-    procedure ExploreUsed(rutExplorRAM: TPICBaseRutExplorRAM);    //devuelve un reporte del uso de la RAM
+    procedure ExploreUsed(rutExplorRAM: TPIC10RutExplorRAM);    //devuelve un reporte del uso de la RAM
     function ValidRAMaddr(addr: word): boolean;  //indica si una posición de memoria es válida
     procedure ClearMemRAM;
     procedure DisableAllRAM;
@@ -258,45 +224,6 @@ var  //variables globales
   PIC10InstSyntax: array[low(TPIC10Inst)..high(TPIC10Inst)] of string[5];
 
 implementation
-
-{ TPICRAMBank }
-//procedure TPICRAMBank.Setmem(i: byte; AValue: TPICRamCellPtr);
-////Escribe en un banco de memoria
-//begin
-//  //Se asume que i debe ser menor que $7F
-//  if ram^[i+AddrStart].state = cs_mapToBnk then begin
-//    //estas direcciones están mapeadas en otro banco
-//    BankMapped^.mem[i] := AValue;
-//  end else begin  //caso normal
-//    ram^[i+AddrStart] := AValue;
-//  end;
-//end;
-procedure TPICRAMBank.Init(num: byte; AddrStart0: word;
-  ram0: TPICBaseRamPtr);
-begin
-  numBank := num;
-  AddrStart :=AddrStart0;
-  ramPtr       :=ram0;
-end;
-{ TPICBaseFlashPage }
-function TPICBaseFlashPage.Getmem(i: word): TPICFlashCell;
-begin
-  //Se asume que i debe ser menor que $800
-  Result := flash^[i+AddrStart];
-end;
-procedure TPICBaseFlashPage.Setmem(i: word; AValue: TPICFlashCell);
-begin
-  flash^[i+AddrStart] := AValue;
-end;
-procedure TPICBaseFlashPage.Init(AddrStart0: word; flash0: TPICBaseFlashPtr);
-begin
-  AddrStart :=AddrStart0;
-  flash     :=flash0;
-end;
-function TPICBaseFlashPage.Total: word;
-begin
-  Result := PIC_PAGE_SIZE;  //tamaño fijo
-end;
 
 { TPIC10 }
 procedure TPIC10.useFlash;
@@ -505,25 +432,13 @@ end;
 //Campos para procesar instrucciones
 function TPIC10.GetBank(i : Longint): TPICRAMBank;
 begin
-  case i of
-  0: Result := bank0;
-  1: Result := bank1;
-  2: Result := bank2;
-  3: Result := bank3;
-  else
-    Result := bank0;
-  end;
+  Result.AddrStart := i*PIC_BANK_SIZE;
+  Result.AddrEnd   := (i+1)*PIC_BANK_SIZE-1;
 end;
-function TPIC10.GetPage(i: Longint): TPICBaseFlashPage;
+function TPIC10.GetPage(i: Longint): TPICFlashPage;
 begin
-  case i of
-  0: Result := page0;
-  1: Result := page1;
-  2: Result := page2;
-  3: Result := page3;
-  else
-    Result := page0;
-  end;
+  Result.AddrStart := i*PIC_PAGE_SIZE;
+  Result.AddrEnd   := (i+1)*PIC_PAGE_SIZE-1;
 end;
 function TPIC10.GetSTATUS: byte;
 begin
@@ -623,7 +538,7 @@ begin
     end;
     exit;
   end;
-  case BSR and %01100000 of
+  case BSR and %111 of
   %000: Result := ram[f_                ].value;
   %001: Result := ram[f_+PIC_BANK_SIZE  ].value;
   %010: Result := ram[f_+PIC_BANK_SIZE*2].value;
@@ -938,7 +853,7 @@ begin
         end;
      end;
   i_TRIS: begin
-    Result := nemo + '0x'+IntToHex(f,2);
+    Result := nemo + '0x'+IntToHex(f_,2);
   end;
   i_BCF,
   i_BSF,
@@ -993,7 +908,7 @@ function TPIC10.CurInstruction: TPIC10Inst;
 var
   val: Word;
 begin
-  val := flash[PCH*256+PCL].value; // page0.mem[PCL].value;
+  val := flash[PCH*256+PCL].value;
   Decode(val);   //decodifica instrucción
   Result := idIns;
 end;
@@ -1018,7 +933,7 @@ var
   resInt : integer;
 begin
   //Decodifica instrucción
-  opc := flash[pc].value; // page0.mem[PCL].value;
+  opc := flash[pc].value;
   Decode(opc);   //decodifica instrucción
   case idIns of
   i_ADDWF: begin
@@ -1613,7 +1528,7 @@ begin
     end;
   end;
 end;
-procedure TPIC10.ExploreUsed(rutExplorRAM: TPICBaseRutExplorRAM);
+procedure TPIC10.ExploreUsed(rutExplorRAM: TPIC10RutExplorRAM);
 {Genera un reporte de uso de RAM}
 var
   i: Integer;
@@ -1705,6 +1620,7 @@ var
   i: Integer;
 begin
   for i:=i1 to i2 do begin  //verifica 1 a 1, por seguridad
+    if i>PIC_MAX_RAM-1 then continue;  //protection
     ram[i].state := status0;
   end;
 end;
@@ -1716,6 +1632,7 @@ var
   i: Integer;
 begin
   for i:= i1 to i2 do begin  //verifica 1 a 1, por seguridad
+    if i>PIC_MAX_RAM-1 then continue;  //protection
     ram[i].mappedTo := @ram[MappedTo];
     inc(MappedTo)
   end;
@@ -2185,18 +2102,9 @@ begin
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
   MaxFlash := PIC_PAGE_SIZE;  //En algunos casos, puede ser menor al tamaño de una página
-  bank0.Init(0, $000, @ram);
-  bank1.Init(1, $080, @ram);
-  bank2.Init(2, $100, @ram);
-  bank3.Init(3, $180, @ram);
   //inicia una configuración común
   ClearMemRAM;
   SetStatRAM($020, $04F, cs_impleGPR);
-
-  page0.Init($0000          , @flash);
-  page1.Init(1*PIC_PAGE_SIZE, @flash);
-  page2.Init(2*PIC_PAGE_SIZE, @flash);
-  page3.Init(3*PIC_PAGE_SIZE, @flash);
 
   //estado inicial
   iFlash := 0;   //posición de inicio
@@ -2210,6 +2118,7 @@ end;
 procedure InitTables;
 begin
   //Inicializa Mnemónico de instrucciones
+  //BYTE-ORIENTED FILE REGISTER OPERATIONS
   PIC10InstName[i_ADDWF ] := 'ADDWF';
   PIC10InstName[i_ANDWF ] := 'ANDWF';
   PIC10InstName[i_CLRF  ] := 'CLRF';
@@ -2228,25 +2137,28 @@ begin
   PIC10InstName[i_SUBWF ] := 'SUBWF';
   PIC10InstName[i_SWAPF ] := 'SWAPF';
   PIC10InstName[i_XORWF ] := 'XORWF';
+  //BIT-ORIENTED FILE REGISTER OPERATIONS
   PIC10InstName[i_BCF   ] := 'BCF';
   PIC10InstName[i_BSF   ] := 'BSF';
   PIC10InstName[i_BTFSC ] := 'BTFSC';
   PIC10InstName[i_BTFSS ] := 'BTFSS';
+  //LITERAL AND CONTROL OPERATIONS
   PIC10InstName[i_ANDLW ] := 'ANDLW';
   PIC10InstName[i_CALL  ] := 'CALL';
   PIC10InstName[i_CLRWDT] := 'CLRWDT';
-  PIC10InstName[i_GOTO ] := 'GOTO';
+  PIC10InstName[i_GOTO  ] := 'GOTO';
   PIC10InstName[i_IORLW ] := 'IORLW';
   PIC10InstName[i_MOVLW ] := 'MOVLW';
-  PIC10InstName[i_RETFIE] := 'RETFIE';
   PIC10InstName[i_RETLW ] := 'RETLW';
-  PIC10InstName[i_RETURN] := 'RETURN';
   PIC10InstName[i_SLEEP ] := 'SLEEP';
   PIC10InstName[i_XORLW ] := 'XORLW';
   PIC10InstName[i_OPTION] := 'OPTION';
-  PIC10InstName[i_TRIS]   := 'TRIS';
-  PIC10InstName[i_MOVLB]  := 'MOVLB';
-  PIC10InstName[i_Inval] := '<Inval>';
+  PIC10InstName[i_TRIS  ] := 'TRIS';
+  //EXTENDED INSTRUCTIONS (Only for some Models)
+  PIC10InstName[i_MOVLB ] := 'MOVLB';
+  PIC10InstName[i_RETURN] := 'RETURN';
+  PIC10InstName[i_RETFIE] := 'RETFIE';
+  PIC10InstName[i_Inval ] := '<Inval>';
 
   //Inicializa Sintaxis de las instrucciones
   {Los valorees para la sintaxis significan:
@@ -2256,6 +2168,7 @@ begin
   a->dirección destino (0..$7FF)
   k->literal byte (0..255)
   }
+  //BYTE-ORIENTED FILE REGISTER OPERATIONS
   PIC10InstSyntax[i_ADDWF ] := 'fd';
   PIC10InstSyntax[i_ANDWF ] := 'fd';
   PIC10InstSyntax[i_CLRF  ] := 'f';
@@ -2274,24 +2187,27 @@ begin
   PIC10InstSyntax[i_SUBWF ] := 'fd';
   PIC10InstSyntax[i_SWAPF ] := 'fd';
   PIC10InstSyntax[i_XORWF ] := 'fd';
+  //BIT-ORIENTED FILE REGISTER OPERATIONS
   PIC10InstSyntax[i_BCF   ] := 'fb';
   PIC10InstSyntax[i_BSF   ] := 'fb';
   PIC10InstSyntax[i_BTFSC ] := 'fb';
   PIC10InstSyntax[i_BTFSS ] := 'fb';
+  //LITERAL AND CONTROL OPERATIONS
   PIC10InstSyntax[i_ANDLW ] := 'k';
   PIC10InstSyntax[i_CALL  ] := 'a';
   PIC10InstSyntax[i_CLRWDT] := '';
   PIC10InstSyntax[i_GOTO ] := 'a';
   PIC10InstSyntax[i_IORLW ] := 'k';
   PIC10InstSyntax[i_MOVLW ] := 'k';
-  PIC10InstSyntax[i_RETFIE] := '';
   PIC10InstSyntax[i_RETLW ] := 'k';
-  PIC10InstSyntax[i_RETURN] := '';
   PIC10InstSyntax[i_SLEEP ] := '';
   PIC10InstSyntax[i_XORLW ] := 'k';
-  PIC10InstName[i_OPTION] := '';
-  PIC10InstName[i_TRIS]   := 'f';
-  PIC10InstName[i_MOVLB]  := 'k';
+  PIC10InstSyntax[i_OPTION] := '';
+  PIC10InstSyntax[i_TRIS]   := 'f';
+  //EXTENDED INSTRUCTIONS (Only for some Models)
+  PIC10InstSyntax[i_MOVLB]  := 'k';
+  PIC10InstSyntax[i_RETURN] := '';
+  PIC10InstSyntax[i_RETFIE] := '';
   PIC10InstSyntax[i_Inval] := '<???>';
 end;
 initialization
