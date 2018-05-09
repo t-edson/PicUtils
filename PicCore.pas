@@ -8,6 +8,8 @@ unit PicCore;
 interface
 uses
   Classes, SysUtils, LCLProc;
+const
+  PIC_MAX_PINES = 64;                //Max. number of pines for the package
 type
   TPICCellState = (
      cs_impleSFR,   //Special function Registers. Can be used.
@@ -96,6 +98,7 @@ type
     bit: byte;        //Bit en RAM
     function GetLabel: string;
   end;
+  TPICPinPtr = ^TPICPin;
 
   { TPicCore }
   {Abcestor of all 8 bits PIC cores}
@@ -108,6 +111,7 @@ type
     //Propiedades que definen la arquitectura del PIC destino.
     NumBanks: byte;      //Número de bancos de RAM.
     NumPages: byte;      //Número de páginas de memoria Flash.
+    pines    : array[1..PIC_MAX_PINES] of TPICPin;
   protected  //Generation of HEX files
     hexLines : TStringList;  //Uusado para crear archivo *.hex
     function HexChecksum(const lin: string): string;

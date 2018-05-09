@@ -20,7 +20,6 @@ const
   PIC_MAX_RAM   = PIC_BANK_SIZE * 8; //Máx RAM memory (8 banks)
   PIC_PAGE_SIZE = 512;
   PIC_MAX_FLASH = PIC_PAGE_SIZE * 4; //Máx Flash memeory (4 pages)
-  PIC_MAX_PINES = 28;                //Max. number of pines for the package
 type  //Baseline PIC instructions
   TPIC10Inst = (
     //BYTE-ORIENTED FILE REGISTER OPERATIONS
@@ -128,7 +127,6 @@ type
     TRISB    : byte;   //In Baseline PICs, this register is internal (Only exists for some devices)
     TRISC    : byte;   //In Baseline PICs, this register is internal (Only exists for some devices)
     BSR      : byte;   //In Baseline PICs, this register is internal (Only exists for some devices)
-    pines    : array[1..PIC_MAX_PINES] of TPICPin;
     property STATUS: byte read GetSTATUS;
     property STATUS_Z: boolean read GetSTATUS_Z write SetSTATUS_Z;
     property STATUS_C: boolean read GetSTATUS_C write SetSTATUS_C;
@@ -147,8 +145,8 @@ type
     procedure ExecTo(endAdd: word);  //Ejecuta hasta cierta dirección
     procedure ExecNCycles(nCyc: integer; out stopped: boolean);  //Ejecuta hasta cierta dirección
     procedure Reset;
-    procedure AddBreakopint(pc: word);
-    procedure ToggleBreakopint(pc: word);
+    procedure AddBreakpoint(pc: word);
+    procedure ToggleBreakpoint(pc: word);
   public   //Memorias
     flash    : TPIC10Flash;   //memoria Flash
     ram      : TPIC10Ram;     //memoria RAM
@@ -1370,13 +1368,13 @@ begin
   end;
   ram[$03].dvalue := %00011000;  //STATUS
 end;
-procedure TPIC10.AddBreakopint(pc: word);
+procedure TPIC10.AddBreakpoint(pc: word);
 //Agrega un punto de interrupción
 begin
   if pc>=PIC_MAX_FLASH then exit;
   flash[pc].breakPnt := true;
 end;
-procedure TPIC10.ToggleBreakopint(pc: word);
+procedure TPIC10.ToggleBreakpoint(pc: word);
 //COnmuta el estado del Punto de Interrupción, en la posición indicada
 begin
   if pc>=PIC_MAX_FLASH then exit;

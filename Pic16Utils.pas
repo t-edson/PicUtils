@@ -20,7 +20,6 @@ const
   PIC_MAX_RAM   = PIC_BANK_SIZE * 4; //Máx RAM memory (4 banks)
   PIC_PAGE_SIZE = 2048;
   PIC_MAX_FLASH = PIC_PAGE_SIZE * 4; //Máx Flash memeory (4 pages)
-  PIC_MAX_PINES = 64;                //Max. number of pines for the package
 type  //Mid-range PIC instructions
   TPIC16Inst = (
     //BYTE-ORIENTED FILE REGISTER OPERATIONS
@@ -117,11 +116,10 @@ type
     W        : byte;   //Registro de trabajo
     PCL      : byte;   //Contador de Programa L
     PCH      : byte;   //Contador de Programa H
-    //pc     : word absolute PCL. //Se debería optimziar así, viendo compatib. en el hardware
+    //pc     : word absolute PCL. //Se debería optimizar así, viendo compatib. en el hardware
     PCLATH   : byte;   //Contador de Programa H
     STKPTR   : 0..7;   //Puntero de pila
     STACK    : array[0..7] of word;
-    pines    : array[1..PIC_MAX_PINES] of TPICPin;
     property STATUS: byte read GetSTATUS;
     property STATUS_Z: boolean read GetSTATUS_Z write SetSTATUS_Z;
     property STATUS_C: boolean read GetSTATUS_C write SetSTATUS_C;
@@ -140,8 +138,8 @@ type
     procedure ExecTo(endAdd: word);  //Ejecuta hasta cierta dirección
     procedure ExecNCycles(nCyc: integer; out stopped: boolean);  //Ejecuta hasta cierta dirección
     procedure Reset;
-    procedure AddBreakopint(pc: word);
-    procedure ToggleBreakopint(pc: word);
+    procedure AddBreakpoint(pc: word);
+    procedure ToggleBreakpoint(pc: word);
   public    //Memorias
     flash    : TPIC16Flash;   //memoria Flash
     ram      : TPIC16Ram;     //memoria RAM
@@ -1323,13 +1321,13 @@ begin
   end;
   ram[$03].dvalue := %00011000;  //STATUS
 end;
-procedure TPIC16.AddBreakopint(pc: word);
+procedure TPIC16.AddBreakpoint(pc: word);
 //Agrega un punto de interrupción
 begin
   if pc>=PIC_MAX_FLASH then exit;
   flash[pc].breakPnt := true;
 end;
-procedure TPIC16.ToggleBreakopint(pc: word);
+procedure TPIC16.ToggleBreakpoint(pc: word);
 //COnmuta el estado del Punto de Interrupción, en la posición indicada
 begin
   if pc>=PIC_MAX_FLASH then exit;
