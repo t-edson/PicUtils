@@ -8,6 +8,7 @@ de PIC.
 Se cambia el nombre de los identificadores de TPIC16Inst.
 Se simplifican los tipos TPICRAMBank y TPICFlashPage y se mueven a la unidad PicCore.
 Se traducen algunos comentarios al ingles.
+Se incluyen constantes que definen direcciones de algunos registros del PIC.
 
 1.3
 ===
