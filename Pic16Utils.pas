@@ -123,16 +123,19 @@ type
     property FRAM: byte read GetFRAM write SetFRAM;
   public  //Execution control
     function CurInstruction: TPIC16Inst;
-    procedure Exec(aPC: word);  //Ejecuta la instrucción en la dirección indicada.
-    procedure Exec();  //Ejecuta instrucción actual
-    procedure ExecTo(endAdd: word);  //Ejecuta hasta cierta dirección
-    procedure ExecNCycles(nCyc: integer; out stopped: boolean);  //Ejecuta hasta cierta dirección
-    procedure Reset;
+    procedure Exec(aPC: word); override; //Ejecuta la instrucción en la dirección indicada.
+    procedure Exec; override; //Ejecuta instrucción actual
+    procedure ExecTo(endAdd: word); override; //Ejecuta hasta cierta dirección
+    procedure ExecStep; override; //Execute one instruction considering CALL as one instruction
+    procedure ExecNCycles(nCyc: integer; out stopped: boolean); override; //Ejecuta hasta cierta dirección
+    procedure Reset; override;
+    function ReadPC: dword; override;
+    procedure WritePC(AValue: dword); override;
   public  //Memories
     procedure Decode(const opCode: word);  //decodifica instrucción
     function Disassembler(const opCode: word; bankNum: byte = 255;
       useVarName: boolean = false): string;  //Desensambla la instrucción actual
-    function DisassemblerAt(addr: word; useVarName: boolean = false): string;  //Desensambla la instrucción actual
+    function DisassemblerAt(addr: word; useVarName: boolean = false): string; override;
     property banks[i : Longint]: TPICRAMBank Read GetBank;
     property pages[i : Longint]: TPICFlashPage Read GetPage;
     property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
@@ -777,7 +780,7 @@ begin
   Decode(flash[PC.W].value);   //decodifica instrucción
   Result := idIns;
 end;
-procedure TPIC16.Exec();
+procedure TPIC16.Exec;
 {Execute the current instruction.}
 begin
   Exec(PC.W);
@@ -1132,6 +1135,14 @@ begin
     //end;
   end;
 end;
+procedure TPIC16.ExecStep;
+begin
+  if CurInstruction = i_CALL then begin
+    ExecTo(PC.W+1);  //Ejecuta hasta la sgte. instrucción, salta el i_CALL
+  end else begin
+    Exec;
+  end;
+end;
 procedure TPIC16.ExecNCycles(nCyc: integer; out stopped: boolean);
 {Ejecuta el número de ciclos indicados, o hasta que se produzca alguna condición
 externa, que puede ser:
@@ -1197,6 +1208,14 @@ begin
     ram[i].dvalue := $00;
   end;
   ram[_STATUS].dvalue := %00011000;  //STATUS
+end;
+function TPIC16.ReadPC: dword;
+begin
+  Result := PC.W;
+end;
+procedure TPIC16.WritePC(AValue: dword);
+begin
+  PC.W := AValue;
 end;
 //Funciones para la memoria RAM
 function TPIC16.GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;

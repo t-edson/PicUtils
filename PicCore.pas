@@ -156,6 +156,7 @@ type
     flash    : TPICFlash;   //memoria Flash
     ram      : TPICRam;     //memoria RAM
     iFlash   : integer;   //puntero a la memoria Flash, para escribir
+    function DisassemblerAt(addr: word; useVarName: boolean = false): string; virtual; abstract; //Desensambla la instrucción actual
   public  //RAM memory functions
     procedure ClearMemRAM;
     procedure DisableAllRAM;
@@ -179,6 +180,14 @@ type
   public  //Execution control
     procedure AddBreakpoint(aPC: word);
     procedure ToggleBreakpoint(aPC: word);
+    procedure Exec(aPC: word); virtual; abstract; //Ejecuta la instrucción en la dirección indicada.
+    procedure Exec; virtual; abstract; //Ejecuta instrucción actual
+    procedure ExecTo(endAdd: word); virtual; abstract; //Ejecuta hasta cierta dirección
+    procedure ExecStep; virtual; abstract; //Execute one instruction considering CALL as one instruction
+    procedure ExecNCycles(nCyc: integer; out stopped: boolean); virtual; abstract; //Ejecuta hasta cierta dirección
+    procedure Reset; virtual; abstract;
+    function ReadPC: dword; virtual; abstract;  //Defined DWORD to cover the 18F PC register
+    procedure WritePC(AValue: dword); virtual; abstract;
   public  //Funciones para la memoria Flash
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
     procedure ClearMemFlash;
