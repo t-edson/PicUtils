@@ -130,13 +130,11 @@ type
     PicMaxFlash: word;
   public   //General fields
     Model    : string;    //modelo de PIC
-    Npins    : byte;      //número de pines
     frequen  : integer;   //frecuencia del reloj
     MaxFreq  : integer;   //máxima frecuencia del reloj
     //Propiedades que definen la arquitectura del PIC destino.
     NumBanks: byte;      //Número de bancos de RAM.
     NumPages: byte;      //Número de páginas de memoria Flash.
-    pines    : array[1..PIC_MAX_PINES] of TPICPin;
     MsjError: string;
   public   //Execution control
     nClck   : Int64;    //Contador de ciclos de reloj
@@ -165,12 +163,17 @@ type
     function SetStatRAMCom(strDef: string): boolean;
     function SetMappRAMCom(strDef: string): boolean;
     function MapRAMtoPIN(strDef: string): boolean;
-    procedure SetPin(pNumber: integer; pLabel: string; pType: TPICPinType);
     function HaveConsecGPR(const i, n: word; maxRam: word): boolean; //Indica si hay "n" bytes libres
     procedure UseConsecGPR(const i, n: word);  //Ocupa "n" bytes en la posición "i"
     procedure SetSharedUnused;
     procedure SetSharedUsed;
     function SetUnimpBITS(strDef: string): boolean;
+  public  //Pins fields
+    Npins    : byte;      //Number of pins
+    pines    : array[1..PIC_MAX_PINES] of TPICPin;
+    procedure ResetPins;
+    procedure SetPin(pNumber: integer; pLabel: string; pType: TPICPinType);
+    function SetPinName(strDef: string): boolean;
   public  //RAM name managment
     function NameRAM(const addr: word): string;
     function NameRAMbit(const addr: word; bit: byte): string;
@@ -188,7 +191,7 @@ type
     procedure Reset; virtual; abstract;
     function ReadPC: dword; virtual; abstract;  //Defined DWORD to cover the 18F PC register
     procedure WritePC(AValue: dword); virtual; abstract;
-  public  //Funciones para la memoria Flash
+  public  //Flash memory functions
     function UsedMemFlash: word;  //devuelve el total de memoria Flash usada
     procedure ClearMemFlash;
   public  //Others
@@ -452,14 +455,14 @@ begin
   end;
 end;
 function TPicCore.SetMappRAMCom(strDef: string): boolean;
-{Define memoria RAM mapeeada, en otra dirección.
-La cadena de definición, tiene el formato:
-<comando 1>, <comando 2>, ...
-Cada comando, tiene el formato:
-<dirIni>-<dirFin>:<banco al que está mapeado>
-Un ejemplo de cadena de definición, es:
+{Define RAM memory, mapped to other address.
+String defintiom, have the format:
+<command 1>, <command 2>, ...
+Each command have the format:
+<addresIni>-<addressFin>:<bank where it's mapped>
+An example of string definition ei:
    '000-01F:bnk0, 020-07F:bnk1'
-Si hay error, devuelve FALSE, y el mensaje de error en MsjError.
+On error this function return FALSE, and the error menssage in MsjError.
 }
 var
   coms: TStringList;
@@ -594,11 +597,47 @@ begin
     coms.Destroy;
   end;
 end;
+procedure TPicCore.ResetPins;
+{Reset the pins of the device.}
+var
+  i: byte;
+begin
+  for i:=1 to Npins do begin
+    pines[i].nam := ' ';
+    pines[i].typ := pptUnused;
+  end;
+end;
 procedure TPicCore.SetPin(pNumber: integer; pLabel: string; pType: TPICPinType);
 begin
   if pNumber>PIC_MAX_PINES then exit;
   pines[pNumber].nam := pLabel;
   pines[pNumber].typ := pType;
+end;
+function TPicCore.SetPinName(strDef: string): boolean;
+{Define the name for a specified Pin of the microcontroller, using a string.
+"strDef" have the format:
+<pin number>:<name of the pin>
+On error this function return FALSE, and the error menssage in MsjError.
+}
+var
+  com, pinName: String;
+  pNumber: integer;
+  pcol: SizeInt;
+begin
+  com := UpCase(trim(strDef));
+  if com='' then exit;
+  pcol := Pos(':', strDef);
+  if pcol=0 then begin
+    MsjError := 'SetPinName: Expected ":".';
+    exit(false);
+  end;
+  //"com" must have the correct format
+  if not TryStrToInt( copy(com, 1, pcol-1) , pNumber) then begin
+    MsjError := 'SetPinName: Wrong Pin Number.';
+    exit(false);
+  end;
+  pinName :=copy(com, pcol+1, 32);  //limited to 32
+  SetPin(pNumber, pinName, pptControl);
 end;
 function TPicCore.HaveConsecGPR(const i, n: word; maxRam: word): boolean;
 {Indica si hay "n" bytes consecutivos libres en la posicióm "i", en RAM.
