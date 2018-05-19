@@ -125,9 +125,15 @@ type
   { TPicCore }
   {Abcestor of all 8 bits PIC cores}
   TPicCore = class
-  protected //Limits
-    PicMaxRam: word;
-    PicMaxFlash: word;
+  private
+    FMaxFlash: integer;
+    procedure SetMaxFlash(AValue: integer);
+  public //Limits
+    {This variables are set just one time. So they work as constant.}
+    PICBANKSIZE : word;
+    PICMAXRAM   : word;
+    PICPAGESIZE : word;
+    PICMAXFLASH : word;
   public   //General fields
     Model    : string;    //modelo de PIC
     frequen  : integer;   //frecuencia del reloj
@@ -136,6 +142,9 @@ type
     NumBanks: byte;      //Número de bancos de RAM.
     NumPages: byte;      //Número de páginas de memoria Flash.
     MsjError: string;
+    {Maximun numbers of Flash cells implemented (Generally used when the first Flash
+    page is partially implemented). Applicable only when it's greater than zero}
+    property MaxFlash: integer read FMaxFlash write SetMaxFlash;
   public   //Execution control
     nClck   : Int64;    //Contador de ciclos de reloj
     CommStop: boolean;  //Bandera para detener la ejecución
@@ -264,6 +273,11 @@ begin
   end;
 end;
 
+procedure TPicCore.SetMaxFlash(AValue: integer);
+begin
+  if FMaxFlash = AValue then Exit;
+  FMaxFlash := AValue;
+end;
 { TPicCore }
 //Creación de archivo *.hex
 function TPicCore.HexChecksum(const lin:string): string;
@@ -376,7 +390,7 @@ var
   i: Integer;
 begin
   for i:=i1 to i2 do begin  //verifica 1 a 1, por seguridad
-    if i>PicMaxRam-1 then continue;  //protection
+    if i>PICMAXRAM-1 then continue;  //protection
     ram[i].state := status0;
   end;
 end;
@@ -388,7 +402,7 @@ var
   i: Integer;
 begin
   for i:= i1 to i2 do begin  //verifica 1 a 1, por seguridad
-    if i>PicMaxRam-1 then continue;  //protection
+    if i>PICMAXRAM-1 then continue;  //protection
     ram[i].mappedTo := @ram[MappedTo];
     inc(MappedTo)
   end;
@@ -591,7 +605,7 @@ begin
       pines[pin].typ := pptPort;
       ramName := ram[add1].name;
       if ramName='' then ramName := 'PORT';
-      pines[pin].nam :=  ramName + '.' + IntToStr(bit);  //Nombre pro defecto
+      pines[pin].nam :=  ramName + '.' + IntToStr(bit);  //Nombre por defecto
     end;
   finally
     coms.Destroy;
@@ -780,13 +794,13 @@ end;
 procedure TPicCore.AddBreakpoint(aPC: word);
 //Agrega un punto de interrupción
 begin
-  if aPC>=PicMaxFlash then exit;
+  if aPC>=PICMAXFLASH then exit;
   flash[aPC].breakPnt := true;
 end;
 procedure TPicCore.ToggleBreakpoint(aPC: word);
 //COnmuta el estado del Punto de Interrupción, en la posición indicada
 begin
-  if aPC>=PicMaxFlash then exit;
+  if aPC>=PICMAXFLASH then exit;
   flash[aPC].breakPnt := not flash[aPC].breakPnt;
 end;
 //FLASH memory functions
@@ -795,7 +809,7 @@ var
   i: Integer;
 begin
   Result := 0;
-  for i:=$0000 to PicMaxFlash-1 do begin
+  for i:=$0000 to PICMAXFLASH-1 do begin
     if flash[i].used then inc(Result);
   end;
 end;

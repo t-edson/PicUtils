@@ -15,11 +15,6 @@ unit Pic16Utils;
 interface
 uses
   Classes, SysUtils, LCLProc, PicCore, MisUtils;
-const
-  PIC_BANK_SIZE = 128;               //RAM bank size
-  PIC_MAX_RAM   = PIC_BANK_SIZE * 4; //Máx RAM memory (4 banks)
-  PIC_PAGE_SIZE = 2048;
-  PIC_MAX_FLASH = PIC_PAGE_SIZE * 4; //Máx Flash memeory (4 pages)
 type  //Mid-range PIC instructions
   TPIC16Inst = (
     //BYTE-ORIENTED FILE REGISTER OPERATIONS
@@ -89,7 +84,6 @@ type
     b_   : byte;          //Bit destino. Válido solo en algunas instrucciones.
     k_   : word;          //Parámetro Literal. Válido solo en algunas instrucciones.
   private //Campos para procesar instrucciones
-    FMaxFlash: integer;
     function GetBank(i : Longint): TPICRAMBank;
     function GetINTCON: byte;
     function GetINTCON_GIE: boolean;
@@ -104,7 +98,6 @@ type
     procedure SetSTATUS_DC(AValue: boolean);
     procedure SetSTATUS_IRP(AValue: boolean);
     procedure SetSTATUS_Z(AValue: boolean);
-    procedure SetMaxFlash(AValue: integer);
     procedure SetFRAM(value: byte);
     function GetFRAM: byte;
   public  //Campos que modelan a los registros internos
@@ -138,8 +131,6 @@ type
     function DisassemblerAt(addr: word; useVarName: boolean = false): string; override;
     property banks[i : Longint]: TPICRAMBank Read GetBank;
     property pages[i : Longint]: TPICFlashPage Read GetPage;
-    property MaxFlash: integer read FMaxFlash write SetMaxFlash;   {Máximo número de celdas de flash implementadas (solo en los casos de
-                         implementación parcial de la Flash). Solo es aplicable cuando es mayor que 0}
   public  //Funciones para la memoria RAM
     function GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;
     function GetFreeByte(out addr: word; shared: boolean): boolean;
@@ -185,7 +176,7 @@ procedure TPIC16.useFlash;
 actualiza el campo "MsjError"}
 begin
   //Protección de desborde
-  if iFlash > MaxFlash then begin
+  if iFlash >= MaxFlash then begin
     MsjError := 'FLASH Memory limit exceeded.';
     exit;
   end;
@@ -343,13 +334,13 @@ end;
 //Campos para procesar instrucciones
 function TPIC16.GetBank(i : Longint): TPICRAMBank;
 begin
-  Result.AddrStart := i*PIC_BANK_SIZE;
-  Result.AddrEnd   := (i+1)*PIC_BANK_SIZE-1;
+  Result.AddrStart := i*PICBANKSIZE;
+  Result.AddrEnd   := (i+1)*PICBANKSIZE-1;
 end;
 function TPIC16.GetPage(i: Longint): TPICFlashPage;
 begin
-  Result.AddrStart := i*PIC_PAGE_SIZE;
-  Result.AddrEnd   := (i+1)*PIC_PAGE_SIZE-1;
+  Result.AddrStart := i*PICPAGESIZE;
+  Result.AddrEnd   := (i+1)*PICPAGESIZE-1;
 end;
 function TPIC16.GetSTATUS: byte;
 begin
@@ -404,11 +395,6 @@ begin
   if AVAlue then ram[$0B].dvalue := ram[$0B].dvalue or  %10000000
             else ram[$0B].dvalue := ram[$0B].dvalue and %01111111;
 end;
-procedure TPIC16.SetMaxFlash(AValue: integer);
-begin
-  if FMaxFlash = AValue then Exit;
-  FMaxFlash := AValue;
-end;
 procedure TPIC16.SetFRAM(value: byte);
 {Escribe en la RAM; en la dirección global f_, el valor "value"
 Para determinar el valor real de la dirección, se toma en cuenta los bits de STATUS}
@@ -427,9 +413,9 @@ begin
   hagan menos operaciones de escritura que lectura.}
   case STATUS and %01100000 of
   %00000000: ram[f_                ].value := value and ram[f_                ].dimplem;
-  %00100000: ram[f_+PIC_BANK_SIZE  ].value := value and ram[f_+PIC_BANK_SIZE  ].dimplem;
-  %01000000: ram[f_+PIC_BANK_SIZE*2].value := value and ram[f_+PIC_BANK_SIZE*2].dimplem;
-  %01100000: ram[f_+PIC_BANK_SIZE*3].value := value and ram[f_+PIC_BANK_SIZE*3].dimplem;
+  %00100000: ram[f_+PICBANKSIZE  ].value := value and ram[f_+PICBANKSIZE  ].dimplem;
+  %01000000: ram[f_+PICBANKSIZE*2].value := value and ram[f_+PICBANKSIZE*2].dimplem;
+  %01100000: ram[f_+PICBANKSIZE*3].value := value and ram[f_+PICBANKSIZE*3].dimplem;
   end;
 end;
 function TPIC16.GetFRAM: byte;
@@ -447,9 +433,9 @@ begin
   end;
   case STATUS and %01100000 of
   %00000000: Result := ram[f_                 ].value;
-  %00100000: Result := ram[f_+ PIC_BANK_SIZE  ].value;
-  %01000000: Result := ram[f_+ PIC_BANK_SIZE*2].value;
-  %01100000: Result := ram[f_+ PIC_BANK_SIZE*3].value;
+  %00100000: Result := ram[f_+ PICBANKSIZE  ].value;
+  %01000000: Result := ram[f_+ PICBANKSIZE*2].value;
+  %01100000: Result := ram[f_+ PICBANKSIZE*3].value;
   end;
 end;
 procedure TPIC16.Decode(const opCode: word);
@@ -678,7 +664,7 @@ begin
   i_XORWF: begin
       if bankNum in [0,1,2,3] then begin
         //Banco conocido
-        f := f_ + PIC_BANK_SIZE*bankNum;  //Dirección real
+        f := f_ + PICBANKSIZE*bankNum;  //Dirección real
       end else begin
         //Se asume un banco desconocido
         useVarName := false;  //Desactiva por si acaso
@@ -703,7 +689,7 @@ begin
   i_MOVWF: begin
         if bankNum in [0,1,2,3] then begin
           //Banco conocido
-          f := f_ + PIC_BANK_SIZE*bankNum;  //Dirección real
+          f := f_ + PICBANKSIZE*bankNum;  //Dirección real
         end else begin
           //Se asume un banco desconocido
           useVarName := false;  //Desactiva por si acaso
@@ -722,7 +708,7 @@ begin
   i_BTFSS: begin    //Instrucciones de bit
       if bankNum in [0,1,2,3] then begin
         //Banco conocido
-        f := f_ + PIC_BANK_SIZE*bankNum;  //Dirección real
+        f := f_ + PICBANKSIZE*bankNum;  //Dirección real
       end else begin
         //Se asume un banco desconocido
         useVarName := false;  //Desactiva por si acaso
@@ -1228,7 +1214,7 @@ var
   i: Integer;
 begin
   Result := false;   //valor inicial
-  maxRam := NumBanks * PIC_BANK_SIZE;  //posición máxima
+  maxRam := NumBanks * PICBANKSIZE;  //posición máxima
   //Realmente debería explorar solo hasta la dirección implementada, por eficiencia
   for i:=0 to maxRam-1 do begin
     if (ram[i].state = cs_impleGPR) and (ram[i].used <> 255) then begin
@@ -1272,7 +1258,7 @@ var
   maxRam: word;
 begin
   Result := false;   //valor inicial
-  maxRam := NumBanks * PIC_BANK_SIZE;  //posición máxima
+  maxRam := NumBanks * PICBANKSIZE;  //posición máxima
   //Realmente debería explorar solo hasta la dirección implementada, por eficiencia
   for i:=0 to maxRam-1 do begin
     if (ram[i].state = cs_impleGPR) and (ram[i].used = 0) then begin
@@ -1298,7 +1284,7 @@ var
 begin
   Result := false;  //valor por defecto
   if size=0 then exit;
-  maxRam := word(NumBanks * PIC_BANK_SIZE) - 1;
+  maxRam := word(NumBanks * PICBANKSIZE) - 1;
   for i:=0 to maxRam do begin  //verifica 1 a 1, por seguridad
     if HaveConsecGPR(i, size, maxRam) then begin
       //encontró del tamaño buscado
@@ -1315,7 +1301,7 @@ var
   i: Integer;
 begin
   Result := 0;
-  for i := 0 to word(NumBanks * PIC_BANK_SIZE) - 1 do begin
+  for i := 0 to word(NumBanks * PICBANKSIZE) - 1 do begin
     if ram[i].AvailGPR then begin
       Result := Result + 1;
     end;
@@ -1327,7 +1313,7 @@ var
   i: Integer;
 begin
   Result := 0;
-  for i := 0 to word(NumBanks * PIC_BANK_SIZE) - 1 do begin
+  for i := 0 to word(NumBanks * PICBANKSIZE) - 1 do begin
     if ram[i].AvailGPR and (ram[i].used <> 0) then begin
       //Notar que "AvailGPR" asegura que no se consideran registros maepados
       Result := Result + 1;
@@ -1339,7 +1325,7 @@ procedure TPIC16.ExploreUsed(rutExplorRAM: TPICRutExplorRAM);
 var
   i: Integer;
 begin
-  for i := 0 to word(NumBanks * PIC_BANK_SIZE) - 1 do begin
+  for i := 0 to word(NumBanks * PICBANKSIZE) - 1 do begin
     if ram[i].AvailGPR and (ram[i].used <> 0) then begin
       rutExplorRAM(i, 0, @ram[i]);
     end;
@@ -1348,13 +1334,13 @@ end;
 function TPIC16.ValidRAMaddr(addr: word): boolean;
 {Indica si la dirección indicada es válida dentro del hardware del PIC}
 begin
-  if addr > PIC_BANK_SIZE*NumBanks then exit(false);   //excede límite
+  if addr > PICBANKSIZE*NumBanks then exit(false);   //excede límite
   exit(true);
 end;
 function TPIC16.BankToAbsRAM(const offset, bank: byte): word;
 {Convierte una dirección y banco a una dirección absoluta}
 begin
-  Result := bank * PIC_BANK_SIZE + offset;
+  Result := bank * PICBANKSIZE + offset;
 end;
 procedure TPIC16.AbsToBankRAM(const AbsAddr: word; var offset, bank: byte);
 {Convierte dirección absoluta a dirección en bancos}
@@ -1387,10 +1373,10 @@ const
   begin
     Result := '';
     //Busca inicio de instrucciones usadas, desde la posición iHex
-    while (iHex<PIC_MAX_FLASH) and not flash[iHex].used  do begin
+    while (iHex<PICMAXFLASH) and not flash[iHex].used  do begin
       inc(iHex);
     end;
-    if iHex>=PIC_MAX_FLASH then begin
+    if iHex>=PICMAXFLASH then begin
       //Llegó al final
       exit;  //sale con cadena nula
     end;
@@ -1399,13 +1385,13 @@ const
     Addre := p1;
     cont := 2;  //inicia contador
     inc(iHex);  //pasa al siguiente
-    while (iHex<PIC_MAX_FLASH) and (cont<MAX_INS_HEX) and flash[iHex].used do begin
+    while (iHex<PICMAXFLASH) and (cont<MAX_INS_HEX) and flash[iHex].used do begin
       inc(iHex);
       inc(cont);
     end;
-    if iHex>=PIC_MAX_FLASH then begin
+    if iHex>=PICMAXFLASH then begin
       //Salió porque Llegó al final
-      p2 := PIC_MAX_FLASH-1;
+      p2 := PICMAXFLASH-1;
     end else if cont>=MAX_INS_HEX then begin
       //Salió porque llegó al máximo de celdas
       if flash[iHex].used then begin
@@ -1436,7 +1422,7 @@ begin
   hexLines.Clear;      //Se usará la lista hexLines
   GenHexExAdd($0000);
   //Prepara extracción de datos
-  minUsed := PIC_MAX_FLASH;
+  minUsed := PICMAXFLASH;
   maxUsed := 0;
   iHex := 0;
   //Inicia la extracción de código
@@ -1495,14 +1481,16 @@ end;
 constructor TPIC16.Create;
 begin
   inherited Create;
-  PicMaxRam := PIC_MAX_RAM;
-  PicMaxFlash := PIC_MAX_FLASH;
-  SetLength(ram, PIC_MAX_RAM);
-  SetLength(flash, PIC_MAX_FLASH);
+  PICBANKSIZE := 128;     //RAM bank size
+  PICMAXRAM   := PICBANKSIZE * 4; //Máx RAM memory (4 banks)
+  PICPAGESIZE := 2048;
+  PICMAXFLASH := PICPAGESIZE * 4; //Máx Flash memeory (4 pages)
+  SetLength(ram, PICMAXRAM);
+  SetLength(flash, PICMAXFLASH);
   //Default hardware settings
   NumBanks:=2;     //Número de bancos de RAM. Por defecto se asume 2
   NumPages:=1;     //Número de páginas de memoria Flash. Por defecto 1
-  MaxFlash := PIC_PAGE_SIZE;  //En algunos casos, puede ser menor al tamaño de una página
+  MaxFlash := PICPAGESIZE;  //En algunos casos, puede ser menor al tamaño de una página
   //inicia una configuración común
   ClearMemRAM;
   SetStatRAM($020, $04F, cs_impleGPR);
