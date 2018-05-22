@@ -1,3 +1,8 @@
+{Unit containing the devices supported by the directive $PROCESSOR.
+The list of devices supported doesn't have to be complete, because the use
+of directive $PROCESSOR is no recommended. It's preferred using units with
+device definition like PIC16F84.pas.
+}
 unit Pic16Devices;
 {$mode objfpc}{$H+}
 interface
@@ -13,11 +18,6 @@ procedure GetSupportedDevices(list: TStrings);
 {Devuelve la lista de dispositivos soportados. Esta lista debe ser la misma que hay en
  GetHardwareInfo. }
 begin
-   list.Add('PIC12F629');
-   list.Add('PIC12F675');
-   list.Add('PIC12F629A');
-   list.Add('PIC12F675A');
-
    list.Add('PIC16C63');
    list.Add('PIC16CR63');
    list.Add('PIC16C65');
@@ -75,23 +75,6 @@ begin
      PIC.SetPin(5, 'VSS', pptGND);
      PIC.SetPin(14, 'VDD', pptVcc);
      end;
-   'PIC12F629',
-   'PIC12F675',
-   'PIC12F629A',
-   'PIC12F675A' : begin
-     pic.MaxFreq:=20000000;
-     pic.Npins := 8;
-     pic.NumBanks:=2;
-     pic.NumPages:=1; pic.MaxFlash:=1024;  //banco 0 implementado parcialmente
-     pic.SetMappRAMCom('080-080:bnk0, 082-084:bnk0, 08A-08B:bnk0');
-     pic.SetStatRAMCom('000-005:SFR, 00A-00C:SFR, 00E-010:SFR, 019-01F:SFR, 020-05F:GPR');
-     pic.SetStatRAMCom('080-085:SFR, 08A-08C:SFR, 08E-090:SFR, 095-09F:SFR, 0A0-0DF:GPR');
-     pic.SetMappRAMCom('0A0-0DF:bnk0');
-     pic.ram[$005].name := 'PORTA';   //Pone un nombre, para que MapRAMtoPIN, asigne nombre a los pines
-     pic.MapRAMtoPIN('005:0-7,1-6,2-5,3-4,4-3,5-2');
-     PIC.SetPin(8, 'VSS', pptGND);
-     PIC.SetPin(1, 'VDD', pptVcc);
-   end;
    'PIC16C63',
    'PIC16CR63':begin
      pic.MaxFreq:=20000000;

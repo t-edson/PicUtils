@@ -1,3 +1,11 @@
+1.5
+===
+Se actualiza la unidad Pic10Devices para que incluya PICs de la serie 10F.
+Se eliminan definiciones internas de la unidad PIC16devices, porque se está prefiriendo 
+el uso de las directivas para definir harware.
+Se modifica el método TPicCore.SetMappRAMCom() para que considere al mapeo para los 
+PIC con instruccioens de 12 bits y los de 14 bits mejorados.
+
 1.4
 ===
 Se cambian los nombres de algunos tipos en Pic16Utils.pas

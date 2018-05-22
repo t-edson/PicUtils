@@ -131,7 +131,7 @@ type
     function DisassemblerAt(addr: word; useVarName: boolean = false): string; override;
     property banks[i : Longint]: TPICRAMBank Read GetBank;
     property pages[i : Longint]: TPICFlashPage Read GetPage;
-  public  //Funciones para la memoria RAM
+  public  //RAM memory functions
     function GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;
     function GetFreeByte(out addr: word; shared: boolean): boolean;
     function GetFreeBytes(const size: integer; var addr: word): boolean;  //obtiene una dirección libre

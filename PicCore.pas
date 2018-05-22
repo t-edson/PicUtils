@@ -128,7 +128,7 @@ type
   private
     FMaxFlash: integer;
     procedure SetMaxFlash(AValue: integer);
-  public //Limits
+  public   //Limits
     {This variables are set just one time. So they work as constant.}
     PICBANKSIZE : word;
     PICMAXRAM   : word;
@@ -261,7 +261,6 @@ function TPICRamCell.AvailGPR: boolean;
 begin
   Result := (state = cs_impleGPR) and (mappedTo = nil);
 end;
-
 { TPICPin }
 function TPICPin.GetLabel: string;
 {Devuelve una etiqueta para el pin}
@@ -272,13 +271,12 @@ begin
     Result := nam;
   end;
 end;
-
+{ TPicCore }
 procedure TPicCore.SetMaxFlash(AValue: integer);
 begin
   if FMaxFlash = AValue then Exit;
   FMaxFlash := AValue;
 end;
-{ TPicCore }
 //Creación de archivo *.hex
 function TPicCore.HexChecksum(const lin:string): string;
 //Devuelve los caracteres en hexadecimal del Checksum, para el archivo *.hex
@@ -519,17 +517,64 @@ begin
         MsjError := 'Memory mapping syntax error: Expected "bnk0", ...';
         exit(false);
       end;
-      if not (bnkTarStr[4] in ['0'..'3']) then begin
+      if not (bnkTarStr[4] in ['0'..'3','A'..'F']) then begin
         MsjError := 'Memory mapping syntax error: Expected "bnk0", ...';
         exit(false);
       end;
       bnkTar := ord(bnkTarStr[4])-48;  //convierte a número
-      //Ya se tienen los parámetros, para definir el mapeo
-      case bnkTar of
-      0: addTar := (add1 and $7F);
-      1: addTar := (add1 and $7F) or $080;
-      2: addTar := (add1 and $7F) or $100;
-      3: addTar := (add1 and $7F) or $180;
+      //We already have the parameters to set the mapping
+      if PICBANKSIZE = $80 then begin
+        //This apply for 14 bits instructions PIC
+        case bnkTar of
+        0:  addTar := (add1 and $7F);
+        1:  addTar := (add1 and $7F) or $080;
+        2:  addTar := (add1 and $7F) or $100;
+        3:  addTar := (add1 and $7F) or $180;
+        //Enhaced PICs have until 32 banks
+        4:  addTar := (add1 and $7F) or $200;
+        5:  addTar := (add1 and $7F) or $280;
+        6:  addTar := (add1 and $7F) or $300;
+        7:  addTar := (add1 and $7F) or $380;
+        8:  addTar := (add1 and $7F) or $400;
+        9:  addTar := (add1 and $7F) or $480;
+        10: addTar := (add1 and $7F) or $500;
+        11: addTar := (add1 and $7F) or $580;
+        12: addTar := (add1 and $7F) or $600;
+        13: addTar := (add1 and $7F) or $680;
+        14: addTar := (add1 and $7F) or $700;
+        15: addTar := (add1 and $7F) or $780;
+        16: addTar := (add1 and $7F) or $800;
+        17: addTar := (add1 and $7F) or $880;
+        18: addTar := (add1 and $7F) or $900;
+        19: addTar := (add1 and $7F) or $980;
+        20: addTar := (add1 and $7F) or $A00;
+        21: addTar := (add1 and $7F) or $A80;
+        22: addTar := (add1 and $7F) or $B00;
+        23: addTar := (add1 and $7F) or $B80;
+        24: addTar := (add1 and $7F) or $C00;
+        25: addTar := (add1 and $7F) or $C80;
+        26: addTar := (add1 and $7F) or $D00;
+        27: addTar := (add1 and $7F) or $D80;
+        28: addTar := (add1 and $7F) or $E00;
+        29: addTar := (add1 and $7F) or $E80;
+        30: addTar := (add1 and $7F) or $F00;
+        31: addTar := (add1 and $7F) or $F80;
+        end;
+      end else if PICBANKSIZE = $20 then begin
+        //This apply for 12 bits instructions PIC
+        case bnkTar of
+        0: addTar := (add1 and $1F);
+        1: addTar := (add1 and $1F) or $020;
+        2: addTar := (add1 and $1F) or $040;
+        3: addTar := (add1 and $1F) or $060;
+        4: addTar := (add1 and $1F) or $080;
+        5: addTar := (add1 and $1F) or $0A0;
+        6: addTar := (add1 and $1F) or $0C0;
+        7: addTar := (add1 and $1F) or $0E0;
+        end;
+      end else begin
+        MsjError := 'Invalid bank size for this device.';
+        exit(false);
       end;
       SetMappRAM(add1, add2, addTar);
     end;

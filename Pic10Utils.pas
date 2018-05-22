@@ -72,8 +72,8 @@ const  //Constants of address and bit positions for some registers
   _STATUS = $03;
   _C      = 0;
   _Z      = 2;
-  _RP0    = 5;   //In PIC10 ????????????????
-  _RP1    = 6;   //In PIC10 ????????????????
+  _RP0    = 5;
+  _RP1    = 6;
 //  _IRP   = 7;
 type
   {Objeto que representa al hardware de un PIC de la serie 10}
@@ -122,6 +122,7 @@ type
     property INTCON_GIE: boolean read GetINTCON_GIE write SetINTCON_GIE;
     property FRAM: byte read GetFRAM write SetFRAM;
   public  //Execution control
+    Enhanced: boolean; //Indicate a Enhanced core like 16F527, 16F570 with more instructions
     function CurInstruction: TPIC10Inst;
     procedure Exec(aPC: word); override; //Ejecuta la instrucción en la dirección indicada.
     procedure Exec; override; //Ejecuta instrucción actual
@@ -138,7 +139,7 @@ type
     function DisassemblerAt(addr: word; useVarName: boolean = false): string; override;
     property banks[i : Longint]: TPICRAMBank Read GetBank;
     property pages[i : Longint]: TPICFlashPage Read GetPage;
-  public  //Funciones para la memoria RAM
+  public  //RAM memory functions
     function GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;
     function GetFreeByte(out addr: word; shared: boolean): boolean;
     function GetFreeBytes(const size: integer; var addr: word): boolean;  //obtiene una dirección libre
@@ -160,6 +161,7 @@ type
     procedure codGotoAt(iflash0: integer; const k: word);
     procedure codCallAt(iflash0: integer; const k: word);
     function codInsert(iflash0, nInsert, nWords: integer): boolean;
+    procedure BTFSC_sw_BTFSS(iflash0: integer);
   public  //Métodos adicionales
     function FindOpcode(Op: string; out syntax: string): TPIC10Inst;  //busca Opcode
     procedure GenHex(hexFile: string; ConfigWord: integer = - 1);  //genera un archivo hex
@@ -308,6 +310,12 @@ begin
   for i:= iflash + nInsert + nWords -1 downto iFlash + nWords do begin
     flash[i] := flash[i-nInsert];
   end;
+end;
+procedure TPIC10.BTFSC_sw_BTFSS(iflash0: integer);
+{Exchange instruction i_BTFSC to i_BTFSS, or viceversa, in the specified address.}
+begin
+  //Solo necesita cambiar el bit apropiado
+  flash[iFlash0].value := flash[iFlash0].value XOR %10000000000;
 end;
 function TPIC10.FindOpcode(Op: string; out syntax: string): TPIC10Inst;
 {Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
@@ -1534,7 +1542,7 @@ constructor TPIC10.Create;
 begin
   inherited Create;
   PICBANKSIZE := 32;      //RAM bank size
-  PICMAXRAM   := PICBANKSIZE * 8;  //Máx RAM memory (4 banks)
+  PICMAXRAM   := PICBANKSIZE * 8;  //Máx RAM memory (8 banks)
   PICPAGESIZE := 512;
   PICMAXFLASH := PICPAGESIZE * 4;  //Máx Flash memeory (4 pages)
   SetLength(ram, PICMAXRAM);
