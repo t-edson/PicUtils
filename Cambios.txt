@@ -5,6 +5,9 @@ Se eliminan definiciones internas de la unidad PIC16devices, porque se está pref
 el uso de las directivas para definir harware.
 Se modifica el método TPicCore.SetMappRAMCom() para que considere al mapeo para los 
 PIC con instruccioens de 12 bits y los de 14 bits mejorados.
+Se cambia de nombre al campo TPICRamCell.dimplem por TPICRamCell.implemAnd y 
+se crea el campo TPICRamCell.implemOr para mayor flexibilidad en configurar bits.
+Se crea el método TPicCore.SetUnimpBITS1() para configurar TPICRamCell.implemOr.
 
 1.4
 ===

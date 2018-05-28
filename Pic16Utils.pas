@@ -398,6 +398,8 @@ end;
 procedure TPIC16.SetFRAM(value: byte);
 {Escribe en la RAM; en la dirección global f_, el valor "value"
 Para determinar el valor real de la dirección, se toma en cuenta los bits de STATUS}
+var
+  pRAM : TPICRamCellPtr;
 begin
   if f_ = 0 then begin
     //Caso especial de direccionamiento indirecto
@@ -412,11 +414,15 @@ begin
   lectura o escritura, pero se prefiere hacerlo en escritura, porque se espera que se
   hagan menos operaciones de escritura que lectura.}
   case STATUS and %01100000 of
-  %00000000: ram[f_                ].value := value and ram[f_                ].dimplem;
-  %00100000: ram[f_+PICBANKSIZE  ].value := value and ram[f_+PICBANKSIZE  ].dimplem;
-  %01000000: ram[f_+PICBANKSIZE*2].value := value and ram[f_+PICBANKSIZE*2].dimplem;
-  %01100000: ram[f_+PICBANKSIZE*3].value := value and ram[f_+PICBANKSIZE*3].dimplem;
+  %00000000: pRAM := @ram[f_              ];
+  %00100000: pRAM := @ram[f_+PICBANKSIZE  ];
+  %01000000: pRAM := @ram[f_+PICBANKSIZE*2];
+  %01100000: pRAM := @ram[f_+PICBANKSIZE*3];
   end;
+  pRAM^.value := value and pRAM^.implemAnd; // or pRAM^.implemOr; No se ha encontrado casos  que requieran implemOr
+  {Se podría optimizar creando una constante en lugar de PICBANKSIZE y evitar así
+  la multiplicación. La constante peude ser glocla, algo así como:
+  cons PIC_BANK_SIZE = 128 y usar luego esta constante para asiganrla a PICBANKSIZE.}
 end;
 function TPIC16.GetFRAM: byte;
 {Devuelve el valor de la RAM, de la posición global f_.
@@ -432,7 +438,7 @@ begin
     exit;
   end;
   case STATUS and %01100000 of
-  %00000000: Result := ram[f_                 ].value;
+  %00000000: Result := ram[f_               ].value;
   %00100000: Result := ram[f_+ PICBANKSIZE  ].value;
   %01000000: Result := ram[f_+ PICBANKSIZE*2].value;
   %01100000: Result := ram[f_+ PICBANKSIZE*3].value;
@@ -881,7 +887,7 @@ begin
     end else begin  //toW
       w := resByte;
     end;
-    STATUS_Z := resByte <> 0;
+    STATUS_Z := resByte = 0;
   end;
   i_MOVF: begin
     resByte := FRAM;
@@ -965,7 +971,7 @@ begin
     end else begin  //toW
       w := resByte;
     end;
-    STATUS_Z := resByte <> 0;
+    STATUS_Z := resByte = 0;
   end;
   //BIT-ORIENTED FILE REGISTER OPERATIONS
   i_BCF: begin
@@ -1031,7 +1037,7 @@ begin
   i_IORLW: begin
     resByte := W or k_;
     w := resByte;
-    STATUS_Z := resByte <> 0;
+    STATUS_Z := resByte = 0;
   end;
   i_MOVLW: begin
       W := k_;
@@ -1091,7 +1097,7 @@ begin
   i_XORLW: begin
     resByte := W xor k_;
     w := resByte;
-    STATUS_Z := resByte <> 0;
+    STATUS_Z := resByte = 0;
   end;
   i_Inval: begin
     MsjError := 'Invalid Opcode';
@@ -1191,7 +1197,8 @@ begin
   CommStop := false;  //Limpia bandera
   //Limpia solamente el valor inicial, no toca los otros campos
   for i:=0 to high(ram) do begin
-    ram[i].dvalue := $00;
+    ram[i].dvalue := $00 or
+           ram[i].implemOr;  //To set unimplemented bits fixed to "1".
   end;
   ram[_STATUS].dvalue := %00011000;  //STATUS
 end;

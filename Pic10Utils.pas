@@ -408,6 +408,8 @@ end;
 procedure TPIC10.SetFRAM(value: byte);
 {Escribe en la RAM; en la dirección global f_, el valor "value"
 Para determinar el valor real de la dirección, se toma en cuenta los bits de BSR}
+var
+  pRAM : TPICRamCellPtr;
 begin
   if f_ = 0 then begin
     //Caso especial de direccionamiento indirecto
@@ -422,15 +424,16 @@ begin
   lectura o escritura, pero se prefiere hacerlo en escritura, porque se espera que se
   hagan menos operaciones de escritura que lectura.}
   case BSR and %111 of
-  %000: ram[f_                ].value := value and ram[f_                ].dimplem;
-  %001: ram[f_+PICBANKSIZE  ].value := value and ram[f_+PICBANKSIZE  ].dimplem;
-  %010: ram[f_+PICBANKSIZE*2].value := value and ram[f_+PICBANKSIZE*2].dimplem;
-  %011: ram[f_+PICBANKSIZE*3].value := value and ram[f_+PICBANKSIZE*3].dimplem;
-  %100: ram[f_+PICBANKSIZE*4].value := value and ram[f_+PICBANKSIZE*4].dimplem;
-  %101: ram[f_+PICBANKSIZE*5].value := value and ram[f_+PICBANKSIZE*5].dimplem;
-  %110: ram[f_+PICBANKSIZE*6].value := value and ram[f_+PICBANKSIZE*6].dimplem;
-  %111: ram[f_+PICBANKSIZE*7].value := value and ram[f_+PICBANKSIZE*7].dimplem;
+  %000: pRAM := @ram[f_              ];
+  %001: pRAM := @ram[f_+PICBANKSIZE  ];
+  %010: pRAM := @ram[f_+PICBANKSIZE*2];
+  %011: pRAM := @ram[f_+PICBANKSIZE*3];
+  %100: pRAM := @ram[f_+PICBANKSIZE*4];
+  %101: pRAM := @ram[f_+PICBANKSIZE*5];
+  %110: pRAM := @ram[f_+PICBANKSIZE*6];
+  %111: pRAM := @ram[f_+PICBANKSIZE*7];
   end;
+  pRAM^.value := value and pRAM^.implemAnd or pRAM^.implemOr;
 end;
 function TPIC10.GetFRAM: byte;
 {Devuelve el valor de la RAM, de la posición global f_.
@@ -446,7 +449,7 @@ begin
     exit;
   end;
   case BSR and %111 of
-  %000: Result := ram[f_                ].value;
+  %000: Result := ram[f_              ].value;
   %001: Result := ram[f_+PICBANKSIZE  ].value;
   %010: Result := ram[f_+PICBANKSIZE*2].value;
   %011: Result := ram[f_+PICBANKSIZE*3].value;
@@ -941,7 +944,7 @@ begin
     end else begin  //toW
       w := resByte;
     end;
-    STATUS_Z := resByte <> 0;
+    STATUS_Z := resByte = 0;
   end;
   i_MOVF: begin
     resByte := FRAM;
@@ -1025,7 +1028,7 @@ begin
     end else begin  //toW
       w := resByte;
     end;
-    STATUS_Z := resByte <> 0;
+    STATUS_Z := resByte = 0;
   end;
   //BIT-ORIENTED FILE REGISTER OPERATIONS
   i_BCF: begin
@@ -1083,7 +1086,7 @@ begin
   i_IORLW: begin
     resByte := W or k_;
     w := resByte;
-    STATUS_Z := resByte <> 0;
+    STATUS_Z := resByte = 0;
   end;
   i_MOVLW: begin
       W := k_;
@@ -1133,7 +1136,7 @@ begin
   i_XORLW: begin
     resByte := W xor k_;
     w := resByte;
-    STATUS_Z := resByte <> 0;
+    STATUS_Z := resByte = 0;
   end;
   i_OPTION: begin
     OPTION := W;
@@ -1247,7 +1250,7 @@ begin
   CommStop := false;  //Limpia bandera
   //Limpia solamente el valor inicial, no toca los otros campos
   for i:=0 to high(ram) do begin
-    ram[i].dvalue := $00;
+    ram[i].dvalue := $00 or ram[i].implemOr;
   end;
   ram[_STATUS].dvalue := %00011000;  //STATUS
 end;

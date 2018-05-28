@@ -65,7 +65,8 @@ type //Models for RAM memory
   private
     Fvalue  : byte;     //value of the memory
     Fused   : byte;     //Bitmap. Indicates the used bits ($00->all free; $ff->all bits used.)
-    Fimplem : byte;     //Bitmap. Indicates the implemented bits
+    FimplemAnd : byte;     //Bitmap. Defines unimplemented bits, set to zero
+    FimplemOr  : byte;     //Bitmap. Defines unimplemented bits, sets to one
     function Getused: byte;
     function Getvalue: byte;
     procedure Setused(AValue: byte);
@@ -79,7 +80,8 @@ type //Models for RAM memory
     mappedTo: TPICRamCellPtr;  //Indica que está mapeado a otra celda, de otra dirección
     property value: byte read Getvalue write Setvalue;
     property dvalue: byte read Fvalue write Fvalue;   //Direct access to "Fvalue".
-    property dimplem: byte read Fimplem write Fimplem;  //Direct access to "Fimplem".
+    property implemAnd: byte read FimplemAnd write FimplemAnd;  //AND mask for implemented bits.
+    property implemOr: byte read FimplemOr write FimplemOr;  //OR mask for implemented bits.
     property used: byte read Getused write Setused;
     function AvailGPR: boolean;
   end;
@@ -177,6 +179,7 @@ type
     procedure SetSharedUnused;
     procedure SetSharedUsed;
     function SetUnimpBITS(strDef: string): boolean;
+    function SetUnimpBITS1(strDef: string): boolean;
   public  //Pins fields
     Npins    : byte;      //Number of pins
     pines    : array[1..PIC_MAX_PINES] of TPICPin;
@@ -374,7 +377,8 @@ begin
     ram[i].addr     := i;
     ram[i].state    := cs_unimplem;
     ram[i].mappedTo := nil;
-    ram[i].dimplem  := $FF;  //Todos implementados, por defecto
+    ram[i].implemAnd:= $FF;  //Todos implementados, por defecto
+    ram[i].implemOr := $00;  //Todos implementados, por defecto
   end;
   //Inicia estado de pines
   for i:=1 to high(pines) do begin
@@ -758,7 +762,13 @@ begin
   end;
 end;
 function TPicCore.SetUnimpBITS(strDef: string): boolean;
-{Fija bits no implementados en posciones de memoria RAM.}
+{Set unimplemented bits (read as 0) in a specific positions of RAM.
+The synyax of strDef is:
+  $SET_UNIMP_BITS <command list>
+The command syntax is:
+  <byte address>:<bit mask>
+A mask of $00 will disable all the bits.
+}
 var
   coms: TStringList;
   add1, n: longint;
@@ -798,7 +808,60 @@ begin
       end;
       mskBitsN := n;  //Se supone que nunca será > 255
       //Ya se tienen los parámetros, para definir el mapeo
-      ram[add1].dimplem := mskBitsN;
+      ram[add1].implemAnd := mskBitsN;
+    end;
+  finally
+    coms.Destroy;
+  end;
+end;
+function TPicCore.SetUnimpBITS1(strDef: string): boolean;
+{Set unimplemented bits (read as 1) in a specific positions of RAM.
+The synyax of strDef is:
+  $SET_UNIMP_BITS <command list>
+The command syntax is:
+  <byte address>:<bit mask>
+A mask of $11 will disable all the bits.
+}
+var
+  coms: TStringList;
+  add1, n: longint;
+  mskBits, com, str: String;
+  mskBitsN: byte;
+begin
+  Result := true;
+  coms:= TStringList.Create;
+  try
+    coms.Delimiter := ',';
+    coms.DelimitedText := strDef;
+    for str in coms do begin
+      com := UpCase(trim(str));
+      if com='' then continue;
+      if length(com)<>6 then begin
+        MsjError := 'Syntax error: Expected "$$$:$$".';
+        exit(false);
+      end;
+      if com[4] <> ':' then begin
+        MsjError := 'Syntax error: Expected ":".';
+        exit(false);
+      end;
+      //Debe tener el formato pedido
+//      debugln(com);
+      if not TryStrToInt('$'+copy(com,1,3), add1) then begin
+        MsjError := 'Syntax error: Wrong address.';
+        exit(false);
+      end;
+      if add1>high(ram) then begin
+        MsjError := 'Syntax error: Wrong address.';
+        exit(false);
+      end;
+      mskBits := copy(com, 5, 2);
+      if not TryStrToInt('$'+mskBits, n) then begin
+        MsjError := 'Syntax error: Wrong mask.';
+        exit(false);
+      end;
+      mskBitsN := n;  //Se supone que nunca será > 255
+      //Ya se tienen los parámetros, para definir el mapeo
+      ram[add1].implemOr := mskBitsN;
     end;
   finally
     coms.Destroy;
