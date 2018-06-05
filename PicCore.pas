@@ -186,6 +186,7 @@ type
     procedure ResetPins;
     procedure SetPin(pNumber: integer; pLabel: string; pType: TPICPinType);
     function SetPinName(strDef: string): boolean;
+    procedure GetPinThev(nPin: integer; out vThev, rThev: Single);
   public  //RAM name managment
     function NameRAM(const addr: word): string;
     function NameRAMbit(const addr: word; bit: byte): string;
@@ -701,6 +702,58 @@ begin
   end;
   pinName :=copy(com, pcol+1, 32);  //limited to 32
   SetPin(pNumber, pinName, pptControl);
+end;
+procedure TPicCore.GetPinThev(nPin: integer; out vThev, rThev: Single);
+{Devuelve el modelo de Thevening del pin de salida, que incluye el voltaje de
+la fuente (en voltios) y la resistencia interna (en ohmios).
+Hubiera sido más sencillo devolver solo el nivel lógico de salida (alto o bajo),
+pero aquí hemos querido ir un poco más lejos.}
+const
+  VCC   = 5;      //Voltaje de alimentación
+  MAX_I = 0.030;  //Se asume la corriente máxima
+  R_INT: Single = VCC / MAX_I;  //Resistencia interna.
+begin
+  if nPin>High(pines) then exit;
+  with pines[nPin] do begin
+    case typ of
+    pptUnused: begin
+      vThev := 0;
+      rThev := 1e+10;  //Alta impedancia
+    end;
+    pptGND: begin
+      vThev := 0;
+      rThev := 0;
+    end;
+    pptVcc: begin
+      vThev := VCC;
+      rThev := 0;
+    end;
+    pptControl: begin  //Pin de Control
+      vThev := 0;
+      rThev := 1e+10;  //Alta impedancia
+      //Habría que definir bien este tipo de pines
+    end;
+    pptPort: begin  //Puerto de Entrada/Salida
+      {Notar que aquí se asume que todos los pines son de salida. Lo cual no sería
+      un problema proque no se espera que se llame a esta función con pines de entrada,
+      pero habría que considerar si conviene trabajar con tipos diferentes para entrada/
+      salida.}
+      //Se supone que está mapeado en RAM
+      if ram[add].value and (1<<bit) = 0 then begin
+        //Bit a 0 lógioc
+        vThev := 0;
+        rThev := R_INT;
+      end else begin
+        //Bit a 1 lógico. Se asume una corriente máxima de 30mA
+        vThev := VCC;
+        rThev := R_INT;
+      end;
+    end;
+    else
+      vThev := 0;
+      rThev := 1e+10;  //Alta impedancia
+    end;
+  end;
 end;
 function TPicCore.HaveConsecGPR(const i, n: word; maxRam: word): boolean;
 {Indica si hay "n" bytes consecutivos libres en la posicióm "i", en RAM.
