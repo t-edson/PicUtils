@@ -10,6 +10,8 @@ se crea el campo TPICRamCell.implemOr para mayor flexibilidad en configurar bits
 Se crea el método TPicCore.SetUnimpBITS1() para configurar TPICRamCell.implemOr.
 Se agrega el método TPicCore.GetPinThev() para poder leer el estado de la salida de 
 un pin del microcontrolador.
+Se corrige el Opcode generado por la instrucción CLRW en la rutina TPIC16.codAsm().
+Se crea la unidad Pic17Utils, para modelar a dispositivos de la gama media mejorada.
 
 1.4
 ===

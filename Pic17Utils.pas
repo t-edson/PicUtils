@@ -1,8 +1,8 @@
 {
 Description
 ===========
-Utilities for programming Mid-range PIC microcontrollers with 14 bits instructions.
-Include most of the PIC16 devices.
+Utilities for programming Mid-range PIC microcontrollers with 14 bits instructions
+of the family Enhanced Mid-range. Include most of the PIC16F1 devices.
 This unit works with 2K words pages and 128 bytes RAM banks.
 The main class TPIC16 must model all devices of this family, including the most complex.
 The aim of this unit is to be used as base for assemblers, compilers and simulators.
@@ -10,13 +10,13 @@ The aim of this unit is to be used as base for assemblers, compilers and simulat
                                          Created by Tito Hinostroza   26/07/2015
 }
 
-unit Pic16Utils;
+unit Pic17Utils;
 {$mode objfpc}{$H+}
 interface
 uses
   Classes, SysUtils, LCLProc, PicCore;
 type  //Mid-range PIC instructions
-  TPIC16Inst = (
+  TPIC17Inst = (
     //BYTE-ORIENTED FILE REGISTER OPERATIONS
     i_ADDWF,
     i_ANDWF,
@@ -55,34 +55,63 @@ type  //Mid-range PIC instructions
     i_SLEEP,
     i_SUBLW,
     i_XORLW,
+    //NEW INSTRUCTIONS
+    i_ADDWFC,
+    i_SUBWFB,
+    i_LSLF,
+    i_LSRF,
+    i_ASRF,
+    i_MOVLP,
+    i_MOVLB,
+    i_BRA,
+    i_BRW,
+    i_CALLW,
+    i_ADDFSR,
+    i_MOVIW,
+    i_MOVIWk, //Syntax of MOVIW that use a constant "k"
+    i_MOVWI,
+    i_MOVWIk, //Syntax of MOVWI that use a constant "k"
+    i_RESET,
     //INVALID INSTRUCTION
     i_Inval
+    {It's not clear for me if TRIS and OTPION instructions are still
+    supported in this family.}
   );
-  //Indica el destino de la instrucción
-  TPIC16destin = (
+  //Destination of the instrucction
+  TPIC17destin = (
     toW = %00000000,    //al acumulador
     toF = %10000000     //a memoria
   );
-
-
+  //Select the FSR
+  TPIC17fsr = (
+    toFSR0 = %0000000,  //FSR0
+    toFSR1 = %1000000   //FSR1
+  );
+  TPIC17fsrShort = (
+    toFSR0s = %000,    //FSR0
+    toFSR1s = %100     //FSR1
+  );
 
 const  //Constants of address and bit positions for some registers
+  _PCL    = $02;
   _STATUS = $03;
   _C      = 0;
   _Z      = 2;
-  _RP0    = 5;
-  _RP1    = 6;
+//  _RP0    = 5;
+//  _RP1    = 6;
 //  _IRP   = 7;
 type
   {Objeto que representa al hardware de un PIC de la serie 16}
-  { TPIC16 }
-  TPIC16 = class(TPicCore)
-  public  //Campos para procesar instrucciones
-    idIns: TPIC16Inst;    //ID de Instrucción.
-    d_   : TPIC16destin;  //Destino de operación. Válido solo en algunas instrucciones.
+  { TPIC17 }
+  TPIC17 = class(TPicCore)
+  public  //Fields to proccess instructions
+    idIns: TPIC17Inst;    //ID de Instrucción.
+    d_   : TPIC17destin;  //Destino de operación. Válido solo en algunas instrucciones.
     f_   : byte;          //Registro destino. Válido solo en algunas instrucciones.
     b_   : byte;          //Bit destino. Válido solo en algunas instrucciones.
     k_   : word;          //Parámetro Literal. Válido solo en algunas instrucciones.
+    n_   : byte;          //Indicates the FSR register. Valid only for some instructions.
+    m_   : byte;          //Indicates the increment/decrement. Valid only for some instructions.
   private //Campos para procesar instrucciones
     function GetBank(i : Longint): TPICRAMBank;
     function GetINTCON: byte;
@@ -115,7 +144,7 @@ type
     property INTCON_GIE: boolean read GetINTCON_GIE write SetINTCON_GIE;
     property FRAM: byte read GetFRAM write SetFRAM;
   public  //Execution control
-    function CurInstruction: TPIC16Inst;
+    function CurInstruction: TPIC17Inst;
     procedure Exec(aPC: word); override; //Ejecuta la instrucción en la dirección indicada.
     procedure Exec; override; //Ejecuta instrucción actual
     procedure ExecTo(endAdd: word); override; //Ejecuta hasta cierta dirección
@@ -143,18 +172,20 @@ type
     procedure AbsToBankRAM(const AbsAddr: word; var offset, bank: byte); //convierte dirección absoluta
   public  //Métodos para codificar instrucciones de acuerdo a la sintaxis
     procedure useFlash;
-    procedure codAsmFD(const inst: TPIC16Inst; const f: word; d: TPIC16destin);
-    procedure codAsmF(const inst: TPIC16Inst; const f: word);
-    procedure codAsmFB(const inst: TPIC16Inst; const f: word; b: byte);
-    procedure codAsmK(const inst: TPIC16Inst; const k: byte);
-    procedure codAsmA(const inst: TPIC16Inst; const a: word);
-    procedure codAsm(const inst: TPIC16Inst);
+    procedure codAsmFD(const inst: TPIC17Inst; const f: word; d: TPIC17destin);
+    procedure codAsmF(const inst: TPIC17Inst; const f: word);
+    procedure codAsmFB(const inst: TPIC17Inst; const f: word; b: byte);
+    procedure codAsmK(const inst: TPIC17Inst; const k: byte);
+    procedure codAsmA(const inst: TPIC17Inst; const a: word);
+    procedure codAsmNK(const inst: TPIC17Inst; const n: TPIC17fsr; k: byte);
+    procedure codAsmNM(const inst: TPIC17Inst; const n: TPIC17fsrShort; m: byte);
+    procedure codAsm(const inst: TPIC17Inst);
     procedure codGotoAt(iflash0: integer; const k: word);
     procedure codCallAt(iflash0: integer; const k: word);
     function codInsert(iflash0, nInsert, nWords: integer): boolean;
     procedure BTFSC_sw_BTFSS(iflash0: integer);
   public  //Métodos adicionales
-    function FindOpcode(Op: string; out syntax: string): TPIC16Inst;  //busca Opcode
+    function FindOpcode(Op: string; out syntax: string): TPIC17Inst;  //busca Opcode
     procedure GenHex(hexFile: string; ConfigWord: integer = - 1);  //genera un archivo hex
     procedure DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);  //vuelva en código que contiene
   public  //Initialization
@@ -164,14 +195,14 @@ type
 
 var  //variables globales
   //mnemónico de las instrucciones
-  PIC16InstName: array[low(TPIC16Inst)..high(TPIC16Inst)] of string[7];
+  PIC17InstName: array[low(TPIC17Inst)..high(TPIC17Inst)] of string[7];
   //sintaxis en ensamblador de las instrucciones
-  PIC16InstSyntax: array[low(TPIC16Inst)..high(TPIC16Inst)] of string[5];
+  PIC17InstSyntax: array[low(TPIC17Inst)..high(TPIC17Inst)] of string[5];
 
 implementation
 
-{ TPIC16 }
-procedure TPIC16.useFlash;
+{ TPIC17 }
+procedure TPIC17.useFlash;
 {Marca la posición actual, como usada, e incrementa el puntero iFlash. S ihay error,
 actualiza el campo "MsjError"}
 begin
@@ -183,22 +214,27 @@ begin
   flash[iFlash].used := true;  //marca como usado
   inc(iFlash);
 end;
-procedure TPIC16.codAsmFD(const inst: TPIC16Inst; const f: word; d: TPIC16destin);
+procedure TPIC17.codAsmFD(const inst: TPIC17Inst; const f: word; d: TPIC17destin);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f,d}
 begin
   case inst of
   i_ADDWF : flash[iFlash].value := %00011100000000 + ord(d) + (f and %1111111);
+  i_ADDWFC: flash[iFlash].value := %11110100000000 + ord(d) + (f and %1111111);
   i_ANDWF : flash[iFlash].value := %00010100000000 + ord(d) + (f and %1111111);
+  i_ASRF  : flash[iFlash].value := %11011100000000 + ord(d) + (f and %1111111);
+  i_LSLF  : flash[iFlash].value := %11010100000000 + ord(d) + (f and %1111111);
+  i_LSRF  : flash[iFlash].value := %11011000000000 + ord(d) + (f and %1111111);
   i_COMF  : flash[iFlash].value := %00100100000000 + ord(d) + (f and %1111111);
   i_DECF  : flash[iFlash].value := %00001100000000 + ord(d) + (f and %1111111);
-  i_DECFSZ: flash[iFlash].value := %00101100000000 + ord(d) + (f and %1111111);
   i_INCF  : flash[iFlash].value := %00101000000000 + ord(d) + (f and %1111111);
+  i_DECFSZ: flash[iFlash].value := %00101100000000 + ord(d) + (f and %1111111);
   i_INCFSZ: flash[iFlash].value := %00111100000000 + ord(d) + (f and %1111111);
   i_IORWF : flash[iFlash].value := %00010000000000 + ord(d) + (f and %1111111);
   i_MOVF  : flash[iFlash].value := %00100000000000 + ord(d) + (f and %1111111);
   i_RLF   : flash[iFlash].value := %00110100000000 + ord(d) + (f and %1111111);
   i_RRF   : flash[iFlash].value := %00110000000000 + ord(d) + (f and %1111111);
   i_SUBWF : flash[iFlash].value := %00001000000000 + ord(d) + (f and %1111111);
+  i_SUBWFB: flash[iFlash].value := %11101100000000 + ord(d) + (f and %1111111);
   i_SWAPF : flash[iFlash].value := %00111000000000 + ord(d) + (f and %1111111);
   i_XORWF : flash[iFlash].value := %00011000000000 + ord(d) + (f and %1111111);
   else
@@ -206,7 +242,7 @@ begin
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
-procedure TPIC16.codAsmF(const inst: TPIC16Inst; const f: word);
+procedure TPIC17.codAsmF(const inst: TPIC17Inst; const f: word);
 {Codifica las instrucciones orientadas a registro, con sinatxis: NEMÓNICO f}
 begin
   case inst of
@@ -217,7 +253,7 @@ begin
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
-procedure TPIC16.codAsmFB(const inst: TPIC16Inst; const f: word; b: byte);
+procedure TPIC17.codAsmFB(const inst: TPIC17Inst; const f: word; b: byte);
 //Codifica las instrucciones orientadas a bit.
 begin
   case inst of
@@ -230,13 +266,15 @@ begin
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
-procedure TPIC16.codAsmK(const inst: TPIC16Inst; const k: byte);
+procedure TPIC17.codAsmK(const inst: TPIC17Inst; const k: byte);
 {Codifica las instrucciones con constantes.}
 begin
   case inst of
   i_ADDLW : flash[iFlash].value := %11111000000000 + k;
   i_ANDLW : flash[iFlash].value := %11100100000000 + k;
   i_IORLW : flash[iFlash].value := %11100000000000 + k;
+  i_MOVLB : flash[iFlash].value := %00000000100000 + (k and %11111);
+  i_MOVLP : flash[iFlash].value := %11000110000000 + (k and %1111111);
   i_MOVLW : flash[iFlash].value := %11000000000000 + k;
   i_RETLW : flash[iFlash].value := %11010000000000 + k;
   i_SUBLW : flash[iFlash].value := %11110000000000 + k;
@@ -246,19 +284,44 @@ begin
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
-procedure TPIC16.codAsmA(const inst: TPIC16Inst; const a: word);
+procedure TPIC17.codAsmA(const inst: TPIC17Inst; const a: word);
 {Codifica las instrucciones de control.
  "a" debe ser word, porque la dirección destino, requiere 11 bits.}
 begin
   case inst of
   i_CALL  : flash[iFlash].value := %10000000000000 + (a and %11111111111);
-  i_GOTO : flash[iFlash].value := %10100000000000 + (a and %11111111111);
+  i_GOTO  : flash[iFlash].value := %10100000000000 + (a and %11111111111);
+  i_BRA   : flash[iFlash].value := %11001000000000 + (a and %111111111);
   else
     raise Exception.Create('Implementation Error.');
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
-procedure TPIC16.codAsm(const inst: TPIC16Inst);
+procedure TPIC17.codAsmNK(const inst: TPIC17Inst; const n: TPIC17fsr; k: byte);
+{Codifica las instrucciones de tipo n,k.
+ "n" solo puede ser 0 o 1.}
+begin
+  case inst of
+  i_ADDFSR: flash[iFlash].value := %11000100000000 + ord(n) + (k and %111111);
+  i_MOVIWk: flash[iFlash].value := %11111100000000 + ord(n) + (k and %111111);
+  i_MOVWIk: flash[iFlash].value := %11111110000000 + ord(n) + (k and %111111);
+  else
+    raise Exception.Create('Implementation Error.');
+  end;
+  useFlash;  //marca como usado e incrementa puntero.
+end;
+procedure TPIC17.codAsmNM(const inst: TPIC17Inst; const n: TPIC17fsrShort; m: byte);
+{Codifica las instrucciones de tipo n,m.}
+begin
+  case inst of
+  i_MOVIW: flash[iFlash].value := %00000000010000 + ord(n) + (m and %11);
+  i_MOVWI: flash[iFlash].value := %00000000011000 + ord(n) + (m and %11);
+  else
+    raise Exception.Create('Implementation Error.');
+  end;
+  useFlash;  //marca como usado e incrementa puntero.
+end;
+procedure TPIC17.codAsm(const inst: TPIC17Inst);
 //Codifica las instrucciones de control.
 begin
   case inst of
@@ -268,24 +331,27 @@ begin
   i_RETFIE: flash[iFlash].value := %00000000001001;
   i_RETURN: flash[iFlash].value := %00000000001000;
   i_SLEEP : flash[iFlash].value := %00000001100011;
+  i_BRW   : flash[iFlash].value := %00000000001011;
+  i_CALLW : flash[iFlash].value := %00000000001010;
+  i_RESET : flash[iFlash].value := %00000000000001;
   else
     raise Exception.Create('Implementation Error.');
   end;
   useFlash;  //marca como usado e incrementa puntero.
 end;
-procedure TPIC16.codGotoAt(iflash0: integer; const k: word);
+procedure TPIC17.codGotoAt(iflash0: integer; const k: word);
 {Codifica una instrucción GOTO, en una posición específica y sin alterar el puntero "iFlash"
 actual. Se usa para completar saltos indefinidos}
 begin
   flash[iFlash0].value := %10100000000000 + (k and %11111111111);
 end;
-procedure TPIC16.codCallAt(iflash0: integer; const k: word);
+procedure TPIC17.codCallAt(iflash0: integer; const k: word);
 {Codifica una instrucción i_CALL, en una posición específica y sin alterar el puntero "iFlash"
 actual. Se usa para completar llamadas indefinidas}
 begin
   flash[iFlash0].value := %10000000000000 + (k and %11111111111);
 end;
-function TPIC16.codInsert(iflash0, nInsert, nWords: integer): boolean;
+function TPIC17.codInsert(iflash0, nInsert, nWords: integer): boolean;
 {Inserta en la posición iflash0, "nInsert" palabras, desplazando "nWords" palabras.
 Al final debe quedar "nInsert" palabras de espacio libre en iflash0.
 Si hay error devuelve FALSE.}
@@ -301,101 +367,101 @@ begin
     flash[i] := flash[i-nInsert];
   end;
 end;
-procedure TPIC16.BTFSC_sw_BTFSS(iflash0: integer);
+procedure TPIC17.BTFSC_sw_BTFSS(iflash0: integer);
 {Exchange instruction i_BTFSC to i_BTFSS, or viceversa, in the specified address.}
 begin
   //Solo necesita cambiar el bit apropiado
   flash[iFlash0].value := flash[iFlash0].value XOR %10000000000;
 end;
-function TPIC16.FindOpcode(Op: string; out syntax: string): TPIC16Inst;
+function TPIC17.FindOpcode(Op: string; out syntax: string): TPIC17Inst;
 {Busca una cádena que represente a una instrucción (Opcode). Si encuentra devuelve
  el identificador de instrucción y una cadena que representa a la sintaxis en "syntax".
  Si no encuentra devuelve "i_Inval". }
 var
-  idInst: TPIC16Inst;
+  idInst: TPIC17Inst;
   tmp: String;
   found: Boolean;
 begin
   found := false;
   tmp := UpperCase(Op);
-  for idInst := low(TPIC16Inst) to high(TPIC16Inst) do begin
-    if PIC16InstName[idInst] = tmp then begin
+  for idInst := low(TPIC17Inst) to high(TPIC17Inst) do begin
+    if PIC17InstName[idInst] = tmp then begin
       found := true;
       break;
     end;
   end;
   if found then begin
     Result := idInst;
-    syntax := PIC16InstSyntax[idInst];
+    syntax := PIC17InstSyntax[idInst];
   end else  begin
     Result := i_Inval;
   end;
 end;
 //Campos para procesar instrucciones
-function TPIC16.GetBank(i : Longint): TPICRAMBank;
+function TPIC17.GetBank(i : Longint): TPICRAMBank;
 begin
   Result.AddrStart := i*PICBANKSIZE;
   Result.AddrEnd   := (i+1)*PICBANKSIZE-1;
 end;
-function TPIC16.GetPage(i: Longint): TPICFlashPage;
+function TPIC17.GetPage(i: Longint): TPICFlashPage;
 begin
   Result.AddrStart := i*PICPAGESIZE;
   Result.AddrEnd   := (i+1)*PICPAGESIZE-1;
 end;
-function TPIC16.GetSTATUS: byte;
+function TPIC17.GetSTATUS: byte;
 begin
   Result := ram[_STATUS].dvalue;
 end;
-function TPIC16.GetSTATUS_Z: boolean;
+function TPIC17.GetSTATUS_Z: boolean;
 begin
   Result := (ram[_STATUS].dvalue and %00000100) <> 0;
 end;
-procedure TPIC16.SetSTATUS_Z(AValue: boolean);
+procedure TPIC17.SetSTATUS_Z(AValue: boolean);
 begin
   if AVAlue then ram[_STATUS].dvalue := ram[_STATUS].dvalue or  %00000100
             else ram[_STATUS].dvalue := ram[_STATUS].dvalue and %11111011;
 end;
-function TPIC16.GetSTATUS_C: boolean;
+function TPIC17.GetSTATUS_C: boolean;
 begin
   Result := (ram[_STATUS].dvalue and %00000001) <> 0;
 end;
-procedure TPIC16.SetSTATUS_C(AValue: boolean);
+procedure TPIC17.SetSTATUS_C(AValue: boolean);
 begin
   if AVAlue then ram[_STATUS].dvalue := ram[_STATUS].dvalue or  %00000001
             else ram[_STATUS].dvalue := ram[_STATUS].dvalue and %11111110;
 end;
-function TPIC16.GetSTATUS_DC: boolean;
+function TPIC17.GetSTATUS_DC: boolean;
 begin
   Result := (ram[_STATUS].dvalue and %00000010) <> 0;
 end;
-procedure TPIC16.SetSTATUS_DC(AValue: boolean);
+procedure TPIC17.SetSTATUS_DC(AValue: boolean);
 begin
   if AVAlue then ram[_STATUS].dvalue := ram[_STATUS].dvalue or  %00000010
             else ram[_STATUS].dvalue := ram[_STATUS].dvalue and %11111101;
 end;
-function TPIC16.GetSTATUS_IRP: boolean;
+function TPIC17.GetSTATUS_IRP: boolean;
 begin
   Result := (ram[_STATUS].dvalue and %10000000) <> 0;
 end;
-procedure TPIC16.SetSTATUS_IRP(AValue: boolean);
+procedure TPIC17.SetSTATUS_IRP(AValue: boolean);
 begin
   if AVAlue then ram[_STATUS].dvalue := ram[_STATUS].dvalue or  %10000000
             else ram[_STATUS].dvalue := ram[_STATUS].dvalue and %01111111;
 end;
-function TPIC16.GetINTCON: byte;
+function TPIC17.GetINTCON: byte;
 begin
   Result := ram[$0B].dvalue;
 end;
-function TPIC16.GetINTCON_GIE: boolean;
+function TPIC17.GetINTCON_GIE: boolean;
 begin
   Result := (ram[$0B].dvalue and %10000000) <> 0;
 end;
-procedure TPIC16.SetINTCON_GIE(AValue: boolean);
+procedure TPIC17.SetINTCON_GIE(AValue: boolean);
 begin
   if AVAlue then ram[$0B].dvalue := ram[$0B].dvalue or  %10000000
             else ram[$0B].dvalue := ram[$0B].dvalue and %01111111;
 end;
-procedure TPIC16.SetFRAM(value: byte);
+procedure TPIC17.SetFRAM(value: byte);
 {Escribe en la RAM; en la dirección global f_, el valor "value"
 Para determinar el valor real de la dirección, se toma en cuenta los bits de STATUS}
 var
@@ -424,7 +490,7 @@ begin
   la multiplicación. La constante peude ser glocla, algo así como:
   cons PIC_BANK_SIZE = 128 y usar luego esta constante para asiganrla a PICBANKSIZE.}
 end;
-function TPIC16.GetFRAM: byte;
+function TPIC17.GetFRAM: byte;
 {Devuelve el valor de la RAM, de la posición global f_.
 Para determinar el valor real de la dirección, se toma en cuenta los bits de STATUS}
 begin
@@ -444,7 +510,7 @@ begin
   %01100000: Result := ram[f_+ PICBANKSIZE*3].value;
   end;
 end;
-procedure TPIC16.Decode(const opCode: word);
+procedure TPIC17.Decode(const opCode: word);
 {Decodifica la instrucción indicada. Actualiza siempre la variable "idIns", y
 dependiendo de la instrucción, puede actualizar: d_, f_, b_ y k_}
 var
@@ -456,12 +522,12 @@ begin
   case codH of
   %000111: begin
     idIns := i_ADDWF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %000101: begin
     idIns := i_ANDWF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %000001: begin
@@ -474,37 +540,37 @@ begin
   end;
   %001001: begin
     idIns := i_COMF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %000011: begin
     idIns := i_DECF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %001011: begin
     idIns := i_DECFSZ;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %001010: begin
     idIns := i_INCF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %001111: begin
     idIns := i_INCFSZ;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %000100: begin
     idIns := i_IORWF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %001000: begin
     idIns := i_MOVF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %000000: begin
@@ -539,27 +605,27 @@ begin
   end;
   %001101: begin
     idIns := i_RLF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %001100: begin
     idIns := i_RRF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %000010: begin
     idIns := i_SUBWF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %001110: begin
     idIns := i_SWAPF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %000110: begin
     idIns := i_XORWF;
-    d_ := TPIC16destin(codL and %10000000);
+    d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
   %111110,
@@ -635,7 +701,7 @@ begin
     end;
   end;
 end;
-function TPIC16.Disassembler(const opCode: word; bankNum: byte = 255;
+function TPIC17.Disassembler(const opCode: word; bankNum: byte = 255;
                              useVarName: boolean = false): string;
 {Desensambla la instrucción "opCode". Esta rutina utiliza las variables: d_, f_, b_ y k_
 "opCode"  -> Código de Operación que se desea decodificar. Se asuem que es de 14 bits.
@@ -652,7 +718,7 @@ var
   f: word;
 begin
   Decode(opCode);   //Decode instruction. Update: idIns, d_, f_, b_ and k_
-  nemo := lowerCase(trim(PIC16InstName[idIns])) + ' ';
+  nemo := lowerCase(trim(PIC17InstName[idIns])) + ' ';
   case idIns of
   i_ADDWF,
   i_ANDWF,
@@ -756,7 +822,7 @@ begin
     Result := 'Invalid'
   end;
 end;
-function TPIC16.DisassemblerAt(addr: word; useVarName: boolean): string;
+function TPIC17.DisassemblerAt(addr: word; useVarName: boolean): string;
 {Disassembler the instruction located at "addr"}
 var
   valOp: Word;
@@ -766,18 +832,18 @@ begin
   bnkOp := flash[addr].curBnk;
   Result := Disassembler(valOp, bnkOp, useVarName);   //desensambla
 end;
-function TPIC16.CurInstruction: TPIC16Inst;
+function TPIC17.CurInstruction: TPIC17Inst;
 {Resturn the instruction pointed by PC, in this moment.}
 begin
   Decode(flash[PC.W].value);   //decodifica instrucción
   Result := idIns;
 end;
-procedure TPIC16.Exec;
+procedure TPIC17.Exec;
 {Execute the current instruction.}
 begin
   Exec(PC.W);
 end;
-procedure TPIC16.Exec(aPC: word);
+procedure TPIC17.Exec(aPC: word);
 {Ejecuta la instrución actual con dirección "pc".
 Falta implementar las operaciones, cuando acceden al registro INDF, el Watchdog timer,
 los contadores, las interrupciones}
@@ -1107,7 +1173,7 @@ begin
   Inc(PC.W);
   Inc(nClck);
 end;
-procedure TPIC16.ExecTo(endAdd: word);
+procedure TPIC17.ExecTo(endAdd: word);
 {Ejecuta las instrucciones secuencialmente, desde la instrucción actual, hasta que el
 contador del programa, sea igual a la dirección "endAdd".}
 begin
@@ -1127,7 +1193,7 @@ begin
     //end;
   end;
 end;
-procedure TPIC16.ExecStep;
+procedure TPIC17.ExecStep;
 begin
   if CurInstruction = i_CALL then begin
     ExecTo(PC.W+1);  //Ejecuta hasta la sgte. instrucción, salta el i_CALL
@@ -1135,7 +1201,7 @@ begin
     Exec;
   end;
 end;
-procedure TPIC16.ExecNCycles(nCyc: integer; out stopped: boolean);
+procedure TPIC17.ExecNCycles(nCyc: integer; out stopped: boolean);
 {Ejecuta el número de ciclos indicados, o hasta que se produzca alguna condición
 externa, que puede ser:
 * Se encuentre un Punto de Interrupción.
@@ -1182,7 +1248,7 @@ begin
   end;
   stopped := false;
 end;
-procedure TPIC16.Reset;
+procedure TPIC17.Reset;
 //Reinicia el dipsoitivo
 var
   i: Integer;
@@ -1200,16 +1266,16 @@ begin
   end;
   ram[_STATUS].dvalue := %00011000;  //STATUS
 end;
-function TPIC16.ReadPC: dword;
+function TPIC17.ReadPC: dword;
 begin
   Result := PC.W;
 end;
-procedure TPIC16.WritePC(AValue: dword);
+procedure TPIC17.WritePC(AValue: dword);
 begin
   PC.W := AValue;
 end;
 //Funciones para la memoria RAM
-function TPIC16.GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;
+function TPIC17.GetFreeBit(out addr: word; out bit: byte; shared: boolean): boolean;
 {Devuelve una dirección libre de la memoria RAM (y el banco).
 "Shared" indica que se marcará el bit como de tipo "Compartido", y se usa para el
 caso en que se quiera comaprtir la misma posición para diversos variables.
@@ -1253,7 +1319,7 @@ begin
     end;
   end;
 end;
-function TPIC16.GetFreeByte(out addr: word; shared: boolean): boolean;
+function TPIC17.GetFreeByte(out addr: word; shared: boolean): boolean;
 {Devuelve una dirección libre de la memoria flash.
 "Shared" indica que se marcará el bit como de tipo "Compartido", y se usa para el
 caso en que se quiera comaprtir la misma posición para diversos variables.
@@ -1279,7 +1345,7 @@ begin
     end;
   end;
 end;
-function TPIC16.GetFreeBytes(const size: integer; var addr: word): boolean;
+function TPIC17.GetFreeBytes(const size: integer; var addr: word): boolean;
 {Devuelve una dirección libre de la memoria flash (y el banco) para ubicar un bloque
  del tamaño indicado. Si encuentra espacio, devuelve TRUE.
  El tamaño se da en bytes, pero si el valor es negativo, se entiende que es en bits.}
@@ -1300,7 +1366,7 @@ begin
     end;
   end;
 end;
-function TPIC16.TotalMemRAM: word;
+function TPIC17.TotalMemRAM: word;
 {Devuelve el total de memoria RAM disponible}
 var
   i: Integer;
@@ -1312,7 +1378,7 @@ begin
     end;
   end;
 end;
-function TPIC16.UsedMemRAM: word;
+function TPIC17.UsedMemRAM: word;
 {Devuelve el total de memoria RAM usada}
 var
   i: Integer;
@@ -1325,7 +1391,7 @@ begin
     end;
   end;
 end;
-procedure TPIC16.ExploreUsed(rutExplorRAM: TPICRutExplorRAM);
+procedure TPIC17.ExploreUsed(rutExplorRAM: TPICRutExplorRAM);
 {Genera un reporte de uso de RAM}
 var
   i: Integer;
@@ -1336,24 +1402,24 @@ begin
     end;
   end;
 end;
-function TPIC16.ValidRAMaddr(addr: word): boolean;
+function TPIC17.ValidRAMaddr(addr: word): boolean;
 {Indica si la dirección indicada es válida dentro del hardware del PIC}
 begin
   if addr > PICBANKSIZE*NumBanks then exit(false);   //excede límite
   exit(true);
 end;
-function TPIC16.BankToAbsRAM(const offset, bank: byte): word;
+function TPIC17.BankToAbsRAM(const offset, bank: byte): word;
 {Convierte una dirección y banco a una dirección absoluta}
 begin
   Result := bank * PICBANKSIZE + offset;
 end;
-procedure TPIC16.AbsToBankRAM(const AbsAddr: word; var offset, bank: byte);
+procedure TPIC17.AbsToBankRAM(const AbsAddr: word; var offset, bank: byte);
 {Convierte dirección absoluta a dirección en bancos}
 begin
    offset := AbsAddr and %01111111;
    bank :=  AbsAddr >> 7;
 end;
-procedure TPIC16.GenHex(hexFile: string; ConfigWord: integer = -1);
+procedure TPIC17.GenHex(hexFile: string; ConfigWord: integer = -1);
 {Genera el archivo *.hex, a partir de los datos almacenados en la memoria
 FLASH.
 Actualiza los campos, minUsed y maxUsed.}
@@ -1451,7 +1517,7 @@ EEPROM: 0x2100 (0x4200 in the HEX file) }
   GenHexComm(self.Model);       //Comentario
   hexLines.SaveToFile(hexFile); //Genera archivo
 end;
-procedure TPIC16.DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);
+procedure TPIC17.DumpCode(lOut: TStrings; incAdrr, incCom, incVarNam: boolean);
 {Desensambla las instrucciones grabadas en el PIC.
  Se debe llamar despues de llamar a GenHex(), para que se actualicen las variables}
 var
@@ -1483,7 +1549,7 @@ begin
     lOut.Add('    ' + lin);
   end;
 end;
-constructor TPIC16.Create;
+constructor TPIC17.Create;
 begin
   inherited Create;
   PICBANKSIZE := 128;     //RAM bank size
@@ -1504,49 +1570,66 @@ begin
   iFlash := 0;   //posición de inicio
   ClearMemFlash;
 end;
-destructor TPIC16.Destroy;
+destructor TPIC17.Destroy;
 begin
   inherited Destroy;
 end;
 procedure InitTables;
 begin
   //Inicializa Mnemónico de instrucciones
-  PIC16InstName[i_ADDWF ] := 'ADDWF';
-  PIC16InstName[i_ANDWF ] := 'ANDWF';
-  PIC16InstName[i_CLRF  ] := 'CLRF';
-  PIC16InstName[i_CLRW  ] := 'CLRW';
-  PIC16InstName[i_COMF  ] := 'COMF';
-  PIC16InstName[i_DECF  ] := 'DECF';
-  PIC16InstName[i_DECFSZ] := 'DECFSZ';
-  PIC16InstName[i_INCF  ] := 'INCF';
-  PIC16InstName[i_INCFSZ] := 'INCFSZ';
-  PIC16InstName[i_IORWF ] := 'IORWF';
-  PIC16InstName[i_MOVF  ] := 'MOVF';
-  PIC16InstName[i_MOVWF ] := 'MOVWF';
-  PIC16InstName[i_NOP   ] := 'NOP';
-  PIC16InstName[i_RLF   ] := 'RLF';
-  PIC16InstName[i_RRF   ] := 'RRF';
-  PIC16InstName[i_SUBWF ] := 'SUBWF';
-  PIC16InstName[i_SWAPF ] := 'SWAPF';
-  PIC16InstName[i_XORWF ] := 'XORWF';
-  PIC16InstName[i_BCF   ] := 'BCF';
-  PIC16InstName[i_BSF   ] := 'BSF';
-  PIC16InstName[i_BTFSC ] := 'BTFSC';
-  PIC16InstName[i_BTFSS ] := 'BTFSS';
-  PIC16InstName[i_ADDLW ] := 'ADDLW';
-  PIC16InstName[i_ANDLW ] := 'ANDLW';
-  PIC16InstName[i_CALL  ] := 'CALL';
-  PIC16InstName[i_CLRWDT] := 'CLRWDT';
-  PIC16InstName[i_GOTO ] := 'GOTO';
-  PIC16InstName[i_IORLW ] := 'IORLW';
-  PIC16InstName[i_MOVLW ] := 'MOVLW';
-  PIC16InstName[i_RETFIE] := 'RETFIE';
-  PIC16InstName[i_RETLW ] := 'RETLW';
-  PIC16InstName[i_RETURN] := 'RETURN';
-  PIC16InstName[i_SLEEP ] := 'SLEEP';
-  PIC16InstName[i_SUBLW ] := 'SUBLW';
-  PIC16InstName[i_XORLW ] := 'XORLW';
-  PIC16InstName[i_Inval] := '<Inval>';
+  PIC17InstName[i_ADDWF ] := 'ADDWF';
+  PIC17InstName[i_ANDWF ] := 'ANDWF';
+  PIC17InstName[i_CLRF  ] := 'CLRF';
+  PIC17InstName[i_CLRW  ] := 'CLRW';
+  PIC17InstName[i_COMF  ] := 'COMF';
+  PIC17InstName[i_DECF  ] := 'DECF';
+  PIC17InstName[i_DECFSZ] := 'DECFSZ';
+  PIC17InstName[i_INCF  ] := 'INCF';
+  PIC17InstName[i_INCFSZ] := 'INCFSZ';
+  PIC17InstName[i_IORWF ] := 'IORWF';
+  PIC17InstName[i_MOVF  ] := 'MOVF';
+  PIC17InstName[i_MOVWF ] := 'MOVWF';
+  PIC17InstName[i_NOP   ] := 'NOP';
+  PIC17InstName[i_RLF   ] := 'RLF';
+  PIC17InstName[i_RRF   ] := 'RRF';
+  PIC17InstName[i_SUBWF ] := 'SUBWF';
+  PIC17InstName[i_SWAPF ] := 'SWAPF';
+  PIC17InstName[i_XORWF ] := 'XORWF';
+  PIC17InstName[i_BCF   ] := 'BCF';
+  PIC17InstName[i_BSF   ] := 'BSF';
+  PIC17InstName[i_BTFSC ] := 'BTFSC';
+  PIC17InstName[i_BTFSS ] := 'BTFSS';
+  PIC17InstName[i_ADDLW ] := 'ADDLW';
+  PIC17InstName[i_ANDLW ] := 'ANDLW';
+  PIC17InstName[i_CALL  ] := 'CALL';
+  PIC17InstName[i_CLRWDT] := 'CLRWDT';
+  PIC17InstName[i_GOTO ]  := 'GOTO';
+  PIC17InstName[i_IORLW ] := 'IORLW';
+  PIC17InstName[i_MOVLW ] := 'MOVLW';
+  PIC17InstName[i_RETFIE] := 'RETFIE';
+  PIC17InstName[i_RETLW ] := 'RETLW';
+  PIC17InstName[i_RETURN] := 'RETURN';
+  PIC17InstName[i_SLEEP ] := 'SLEEP';
+  PIC17InstName[i_SUBLW ] := 'SUBLW';
+  PIC17InstName[i_XORLW ] := 'XORLW';
+  //New instructions
+  PIC17InstName[i_ADDWFC] := 'ADDWFC';
+  PIC17InstName[i_SUBWFB] := 'SUBWFB';
+  PIC17InstName[i_LSLF  ] := 'LSLF';
+  PIC17InstName[i_LSRF  ] := 'LSRF';
+  PIC17InstName[i_ASRF  ] := 'ASRF';
+  PIC17InstName[i_MOVLP ] := 'MOVLP';
+  PIC17InstName[i_MOVLB ] := 'MOVLB';
+  PIC17InstName[i_BRA   ] := 'BRA';
+  PIC17InstName[i_BRW   ] := 'BRW';
+  PIC17InstName[i_CALLW ] := 'CALLW';
+  PIC17InstName[i_ADDFSR] := 'ADDFSR';
+  PIC17InstName[i_MOVIW ] := 'MOVIW';
+  PIC17InstName[i_MOVIWk] := 'MOVIW';
+  PIC17InstName[i_MOVWI ] := 'MOVWI';
+  PIC17InstName[i_MOVWIk] := 'MOVWI';
+  PIC17InstName[i_RESET ] := 'RESET';
+  PIC17InstName[i_Inval] := '<Inval>';
 
   //Inicializa Sintaxis de las instrucciones
   {Los valorees para la sintaxis significan:
@@ -1556,42 +1639,59 @@ begin
   a->dirección destino (0..$7FF)
   k->literal byte (0..255)
   }
-  PIC16InstSyntax[i_ADDWF ] := 'fd';
-  PIC16InstSyntax[i_ANDWF ] := 'fd';
-  PIC16InstSyntax[i_CLRF  ] := 'f';
-  PIC16InstSyntax[i_CLRW  ] := '';
-  PIC16InstSyntax[i_COMF  ] := 'fd';
-  PIC16InstSyntax[i_DECF  ] := 'fd';
-  PIC16InstSyntax[i_DECFSZ] := 'fd';
-  PIC16InstSyntax[i_INCF  ] := 'fd';
-  PIC16InstSyntax[i_INCFSZ] := 'fd';
-  PIC16InstSyntax[i_IORWF ] := 'fd';
-  PIC16InstSyntax[i_MOVF  ] := 'fd';
-  PIC16InstSyntax[i_MOVWF ] := 'f';
-  PIC16InstSyntax[i_NOP   ] := '';
-  PIC16InstSyntax[i_RLF   ] := 'fd';
-  PIC16InstSyntax[i_RRF   ] := 'fd';
-  PIC16InstSyntax[i_SUBWF ] := 'fd';
-  PIC16InstSyntax[i_SWAPF ] := 'fd';
-  PIC16InstSyntax[i_XORWF ] := 'fd';
-  PIC16InstSyntax[i_BCF   ] := 'fb';
-  PIC16InstSyntax[i_BSF   ] := 'fb';
-  PIC16InstSyntax[i_BTFSC ] := 'fb';
-  PIC16InstSyntax[i_BTFSS ] := 'fb';
-  PIC16InstSyntax[i_ADDLW ] := 'k';
-  PIC16InstSyntax[i_ANDLW ] := 'k';
-  PIC16InstSyntax[i_CALL  ] := 'a';
-  PIC16InstSyntax[i_CLRWDT] := '';
-  PIC16InstSyntax[i_GOTO ] := 'a';
-  PIC16InstSyntax[i_IORLW ] := 'k';
-  PIC16InstSyntax[i_MOVLW ] := 'k';
-  PIC16InstSyntax[i_RETFIE] := '';
-  PIC16InstSyntax[i_RETLW ] := 'k';
-  PIC16InstSyntax[i_RETURN] := '';
-  PIC16InstSyntax[i_SLEEP ] := '';
-  PIC16InstSyntax[i_SUBLW ] := 'k';
-  PIC16InstSyntax[i_XORLW ] := 'k';
-  PIC16InstSyntax[i_Inval] := '<???>';
+  PIC17InstSyntax[i_ADDWF ] := 'fd';
+  PIC17InstSyntax[i_ANDWF ] := 'fd';
+  PIC17InstSyntax[i_CLRF  ] := 'f';
+  PIC17InstSyntax[i_CLRW  ] := '';
+  PIC17InstSyntax[i_COMF  ] := 'fd';
+  PIC17InstSyntax[i_DECF  ] := 'fd';
+  PIC17InstSyntax[i_DECFSZ] := 'fd';
+  PIC17InstSyntax[i_INCF  ] := 'fd';
+  PIC17InstSyntax[i_INCFSZ] := 'fd';
+  PIC17InstSyntax[i_IORWF ] := 'fd';
+  PIC17InstSyntax[i_MOVF  ] := 'fd';
+  PIC17InstSyntax[i_MOVWF ] := 'f';
+  PIC17InstSyntax[i_NOP   ] := '';
+  PIC17InstSyntax[i_RLF   ] := 'fd';
+  PIC17InstSyntax[i_RRF   ] := 'fd';
+  PIC17InstSyntax[i_SUBWF ] := 'fd';
+  PIC17InstSyntax[i_SWAPF ] := 'fd';
+  PIC17InstSyntax[i_XORWF ] := 'fd';
+  PIC17InstSyntax[i_BCF   ] := 'fb';
+  PIC17InstSyntax[i_BSF   ] := 'fb';
+  PIC17InstSyntax[i_BTFSC ] := 'fb';
+  PIC17InstSyntax[i_BTFSS ] := 'fb';
+  PIC17InstSyntax[i_ADDLW ] := 'k';
+  PIC17InstSyntax[i_ANDLW ] := 'k';
+  PIC17InstSyntax[i_CALL  ] := 'a';
+  PIC17InstSyntax[i_CLRWDT] := '';
+  PIC17InstSyntax[i_GOTO ]  := 'a';
+  PIC17InstSyntax[i_IORLW ] := 'k';
+  PIC17InstSyntax[i_MOVLW ] := 'k';
+  PIC17InstSyntax[i_RETFIE] := '';
+  PIC17InstSyntax[i_RETLW ] := 'k';
+  PIC17InstSyntax[i_RETURN] := '';
+  PIC17InstSyntax[i_SLEEP ] := '';
+  PIC17InstSyntax[i_SUBLW ] := 'k';
+  PIC17InstSyntax[i_XORLW ] := 'k';
+  //New instructions
+  PIC17InstSyntax[i_ADDWFC] := 'fd';
+  PIC17InstSyntax[i_SUBWFB] := 'fd';
+  PIC17InstSyntax[i_LSLF  ] := 'fd';
+  PIC17InstSyntax[i_LSRF  ] := 'fd';
+  PIC17InstSyntax[i_ASRF  ] := 'fd';
+  PIC17InstSyntax[i_MOVLP ] := 'k';
+  PIC17InstSyntax[i_MOVLB ] := 'k';
+  PIC17InstSyntax[i_BRA   ] := 'a';
+  PIC17InstSyntax[i_BRW   ] := '';
+  PIC17InstSyntax[i_CALLW ] := '';
+  PIC17InstSyntax[i_ADDFSR] := 'n,k';  //n=0,1
+  PIC17InstSyntax[i_MOVIW ] := 'n,m';  //m=00,01,10,11
+  PIC17InstSyntax[i_MOVIWk] := 'n,k';
+  PIC17InstSyntax[i_MOVWI ] := 'n,m';
+  PIC17InstSyntax[i_MOVWIk] := 'n,k';
+  PIC17InstSyntax[i_RESET ] := '';
+  PIC17InstSyntax[i_Inval] := '<???>';
 end;
 initialization
   InitTables;
