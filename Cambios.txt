@@ -14,6 +14,7 @@ un pin del microcontrolador.
 Se corrige el Opcode generado por la instrucción CLRW en la rutina TPIC16.codAsm().
 Se crea la unidad Pic17Utils, para modelar a dispositivos de la gama media mejorada.
 Se agrega la inicialización de los registros TRIS en la rutina de Reset.
+Se agrega la unidad Pic17Utils para PIC de rango medio mejorado. Aún en desarrollo. 
 
 1.4
 ===
