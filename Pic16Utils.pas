@@ -410,7 +410,7 @@ begin
     end;
     exit;
   end;
-  {Se escribe aplicando la máscara de bits implementados. Se podría usra la máscara en
+  {Se escribe aplicando la máscara de bits implementados. Se podría usar la máscara en
   lectura o escritura, pero se prefiere hacerlo en escritura, porque se espera que se
   hagan menos operaciones de escritura que lectura.}
   case STATUS and %01100000 of
@@ -427,13 +427,16 @@ end;
 function TPIC16.GetFRAM: byte;
 {Devuelve el valor de la RAM, de la posición global f_.
 Para determinar el valor real de la dirección, se toma en cuenta los bits de STATUS}
+var
+  addr: Byte;
 begin
   if f_ = 0 then begin
     //Caso especial de direccionamiento indirecto
     if STATUS_IRP then begin
       Result := ram[ram[04].value + $100].value;
     end else begin
-      Result := ram[ram[04].value].value;
+      addr := ram[04].value;
+      Result := ram[addr].value and ram[addr].implemAnd;
     end;
     exit;
   end;
@@ -789,7 +792,7 @@ var
   resWord: word;
   resInt : integer;
 begin
-  //Decodifica instrucción
+  //Decode instruction
   opc := flash[aPC].value;
   Decode(opc);   //decodifica instrucción
   case idIns of
@@ -1199,6 +1202,14 @@ begin
            ram[i].implemOr;  //To set unimplemented bits fixed to "1".
   end;
   ram[_STATUS].dvalue := %00011000;  //STATUS
+  ram[$85].dvalue := $FF and ram[$85].implemAnd or ram[$85].implemOr;  //TRISA
+  ram[$86].dvalue := $FF and ram[$86].implemAnd or ram[$86].implemOr;  //TRISB
+  ram[$87].dvalue := $FF and ram[$87].implemAnd or ram[$87].implemOr;  //TRISC
+  //No todos los PIC tienen PORTD y PORTE. Usamos este método indirecto para averiguarlo
+  if ram[$0C].state = cs_impleSFR then begin
+    ram[$88].dvalue := $FF and ram[$88].implemAnd or ram[$88].implemOr;  //TRISD
+    ram[$89].dvalue := $FF and ram[$89].implemAnd or ram[$89].implemOr;  //TRISE
+  end;
 end;
 function TPIC16.ReadPC: dword;
 begin

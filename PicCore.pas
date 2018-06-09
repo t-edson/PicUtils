@@ -42,7 +42,9 @@ type
     nam: string;      //Eqtiueta o nombre
     typ: TPICPinType; //Tipo de pin
     add: word;        //Dirección en RAM
+    addTRIS: word;    //Dirección de bit de configuración
     bit: byte;        //Bit en RAM
+    bitMask: byte;    //Mácara de bit
     function GetLabel: string;
   end;
   TPICPinPtr = ^TPICPin;
@@ -590,9 +592,9 @@ end;
 function TPicCore.MapRAMtoPIN(strDef: string): boolean;
 {Mapea puertos de memoria RAM a pines físicos del dispositivo. Útil para la simulación
 La cadena de definición, tiene el formato:
-<dirección>:<comando 1>, <comando 2>, ...
-Cada comando, tiene el formato:
-<dirIni>-<dirFin>:<banco al que está mapeado>
+<dirección>:<lista de asociaciones>
+Cada asociación tiene el formato:
+<bit Number>-<pin Number>
 Un ejemplo de cadena de definición, es:
    '005:0-17,1-18,2-1,3-2,4-3'
 Si hay error, devuelve FALSE, y el mensaje de error en MsjError.
@@ -650,8 +652,12 @@ begin
         exit(false);
       end;
       //Ya se tiene el BIT y el PIN. Configura datos del PIN
+      bit := bit and %111; //protección
       pines[pin].add := add1;
       pines[pin].bit := bit;
+      pines[pin].bitMask := 1<<bit;  //Calcula mácara para acelerar ejecución
+      pines[pin].addTRIS := add1+$80;  {Calcula dirección de TRIS. NOTAR que esto solo
+                                        es útil para la familia de Rango medio}
       pines[pin].typ := pptPort;
       ramName := ram[add1].name;
       if ramName='' then ramName := 'PORT';
@@ -711,48 +717,56 @@ pero aquí hemos querido ir un poco más lejos.}
 const
   VCC   = 5;      //Voltaje de alimentación
   MAX_I = 0.030;  //Se asume la corriente máxima
-  R_INT: Single = VCC / MAX_I;  //Resistencia interna.
+  R_INT: Single = VCC / MAX_I;
+var
+  tris: Byte;
+  //Resistencia interna.
 begin
   if nPin>High(pines) then exit;
-  with pines[nPin] do begin
-    case typ of
-    pptUnused: begin
-      vThev := 0;
-      rThev := 1e+10;  //Alta impedancia
-    end;
-    pptGND: begin
-      vThev := 0;
-      rThev := 0;
-    end;
-    pptVcc: begin
-      vThev := VCC;
-      rThev := 0;
-    end;
-    pptControl: begin  //Pin de Control
-      vThev := 0;
-      rThev := 1e+10;  //Alta impedancia
-      //Habría que definir bien este tipo de pines
-    end;
-    pptPort: begin  //Puerto de Entrada/Salida
-      {Notar que aquí se asume que todos los pines son de salida. Lo cual no sería
-      un problema proque no se espera que se llame a esta función con pines de entrada,
-      pero habría que considerar si conviene trabajar con tipos diferentes para entrada/
-      salida.}
-      //Se supone que está mapeado en RAM
-      if ram[add].value and (1<<bit) = 0 then begin
-        //Bit a 0 lógioc
-        vThev := 0;
-        rThev := R_INT;
+  case pines[nPin].typ of
+  pptUnused: begin
+    vThev := 0;
+    rThev := 1e+10;  //Alta impedancia
+  end;
+  pptGND: begin
+    vThev := 0;
+    rThev := 0;
+  end;
+  pptVcc: begin
+    vThev := VCC;
+    rThev := 0;
+  end;
+  pptControl: begin  //Pin de Control
+    vThev := 0;
+    rThev := 1e+10;  //Alta impedancia
+    //Habría que definir bien este tipo de pines
+  end;
+  pptPort: begin  //Puerto de Entrada/Salida
+    //Se supone que está mapeado en RAM
+    with pines[nPin] do begin
+      //Verifica primero el estado del pin (entrada salida)
+      tris := ram[addTRIS].value;
+      if tris and bitMask = 0 then begin
+        //Es salida
+        if ram[add].value and bitMask = 0 then begin
+          //Bit a 0 lógioc
+          vThev := 0;
+          rThev := R_INT;
+        end else begin
+          //Bit a 1 lógico. Se asume una corriente máxima de 30mA
+          vThev := VCC;
+          rThev := R_INT;
+        end;
       end else begin
-        //Bit a 1 lógico. Se asume una corriente máxima de 30mA
-        vThev := VCC;
-        rThev := R_INT;
+        //Es entrada
+        vThev := 0;
+        rThev := 1e+9;  //Alta impednacia
       end;
     end;
-    else
-      vThev := 0;
-      rThev := 1e+10;  //Alta impedancia
-    end;
+  end;
+  else
+    vThev := 0;
+    rThev := 1e+10;  //Alta impedancia
   end;
 end;
 function TPicCore.HaveConsecGPR(const i, n: word; maxRam: word): boolean;

@@ -8,10 +8,12 @@ PIC con instruccioens de 12 bits y los de 14 bits mejorados.
 Se cambia de nombre al campo TPICRamCell.dimplem por TPICRamCell.implemAnd y 
 se crea el campo TPICRamCell.implemOr para mayor flexibilidad en configurar bits.
 Se crea el método TPicCore.SetUnimpBITS1() para configurar TPICRamCell.implemOr.
+Se agregan los campos TPICPin.addTRIS y TPICPin.bitMask para almacenar información adicional sobre un pin de salida.
 Se agrega el método TPicCore.GetPinThev() para poder leer el estado de la salida de 
 un pin del microcontrolador.
 Se corrige el Opcode generado por la instrucción CLRW en la rutina TPIC16.codAsm().
 Se crea la unidad Pic17Utils, para modelar a dispositivos de la gama media mejorada.
+Se agrega la inicialización de los registros TRIS en la rutina de Reset.
 
 1.4
 ===
