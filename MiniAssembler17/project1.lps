@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <PathDelim Value="\"/>
+    <Version Value="10"/>
+    <BuildModes Active="Default"/>
+    <Units Count="4">
+      <Unit0>
+        <Filename Value="project1.lpr"/>
+        <IsPartOfProject Value="True"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="-1"/>
+        <TopLine Value="-1"/>
+        <CursorPos X="-1" Y="-1"/>
+        <UsageCount Value="40"/>
+      </Unit0>
+      <Unit1>
+        <Filename Value="unit1.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="Form1"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="Unit1"/>
+        <TopLine Value="88"/>
+        <CursorPos X="17" Y="105"/>
+        <UsageCount Value="40"/>
+        <Loaded Value="True"/>
+        <LoadedDesigner Value="True"/>
+      </Unit1>
+      <Unit2>
+        <Filename Value="..\Pic16Utils.pas"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="247"/>
+        <CursorPos X="25" Y="261"/>
+        <UsageCount Value="19"/>
+        <Loaded Value="True"/>
+      </Unit2>
+      <Unit3>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="675"/>
+        <CursorPos X="59" Y="691"/>
+        <FoldState Value=" TL00A13132]57 p0;G025]8uH024 T4F01 T5H0%11]9MjD020t]W*342 T8jS2G7 T3lW0B[:5iXka05G pjEjb0J[=4pp3yP0J5[T4jG0h[94Zjf053]cKT2u4 T0lbT3C1B662543111G]bYu0o201B]BgigZ2M[94k4L1J]v1iO]9]IXiZB6E[95PN3D]9bj9W56[I5Ut1M[{@5dU2B THm4CM2162 p0t6SN011 T6pD01Id"/>
+        <ExtraEditorCount Value="1"/>
+        <ExtraEditor1>
+          <IsVisibleTab Value="True"/>
+          <WindowIndex Value="1"/>
+          <TopLine Value="1742"/>
+          <CursorPos X="22" Y="1766"/>
+        </ExtraEditor1>
+        <UsageCount Value="18"/>
+        <Bookmarks Count="1">
+          <Item0 X="8" Y="731" ID="1"/>
+        </Bookmarks>
+        <Loaded Value="True"/>
+      </Unit3>
+    </Units>
+    <JumpHistory Count="29" HistoryIndex="28">
+      <Position1>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="1314" Column="7" TopLine="1281"/>
+      </Position1>
+      <Position2>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="1373" TopLine="410"/>
+      </Position2>
+      <Position3>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="280" Column="26" TopLine="252"/>
+      </Position3>
+      <Position4>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="268" Column="26" TopLine="252"/>
+      </Position4>
+      <Position5>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="168" TopLine="105"/>
+      </Position5>
+      <Position6>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="285" Column="3" TopLine="173"/>
+      </Position6>
+      <Position7>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="205" Column="69" TopLine="191"/>
+      </Position7>
+      <Position8>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="291" Column="71" TopLine="187"/>
+      </Position8>
+      <Position9>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="304" Column="61" TopLine="200"/>
+      </Position9>
+      <Position10>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="313" Column="48" TopLine="210"/>
+      </Position10>
+      <Position11>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="90" Column="12" TopLine="72"/>
+      </Position11>
+      <Position12>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="315" Column="43" TopLine="270"/>
+      </Position12>
+      <Position13>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="308" Column="18" TopLine="282"/>
+      </Position13>
+      <Position14>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="321" Column="6" TopLine="302"/>
+      </Position14>
+      <Position15>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="287" Column="35" TopLine="263"/>
+      </Position15>
+      <Position16>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="470" Column="14" TopLine="454"/>
+      </Position16>
+      <Position17>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="1697" TopLine="1663"/>
+      </Position17>
+      <Position18>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="112" Column="87" TopLine="101"/>
+      </Position18>
+      <Position19>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="123" Column="5" TopLine="102"/>
+      </Position19>
+      <Position20>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="513" TopLine="459"/>
+      </Position20>
+      <Position21>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="664" Column="8" TopLine="546"/>
+      </Position21>
+      <Position22>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="653" Column="21" TopLine="625"/>
+      </Position22>
+      <Position23>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="858" Column="10" TopLine="762"/>
+      </Position23>
+      <Position24>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="653" Column="14" TopLine="606"/>
+      </Position24>
+      <Position25>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="273" Column="3" TopLine="173"/>
+      </Position25>
+      <Position26>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="622" Column="25" TopLine="580"/>
+      </Position26>
+      <Position27>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="593" Column="51" TopLine="571"/>
+      </Position27>
+      <Position28>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="624" Column="7" TopLine="599"/>
+      </Position28>
+      <Position29>
+        <Filename Value="..\Pic17Utils.pas"/>
+        <Caret Line="668" Column="7" TopLine="644"/>
+      </Position29>
+    </JumpHistory>
+  </ProjectSession>
+</CONFIG>

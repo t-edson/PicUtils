@@ -1499,7 +1499,8 @@ Config: 0x2007 (0x400E in the HEX file)
 EEPROM: 0x2100 (0x4200 in the HEX file) }
     cfg := IntToHex(ConfigWord and $FFFF, 4);
     tmp +=copy(cfg,3,2) + copy(cfg,1,2);  //se graba con los bytes invertidos
-    GenHexData($2007, tmp);
+//    GenHexData($2007, tmp);
+    GenHexData($FFF, tmp);  //By convention it's used this address.
   end;
   GenHexEOF;                    //Fin de archivo
   GenHexComm(self.Model);       //Comentario
@@ -1664,4 +1665,5 @@ end;
 initialization
   InitTables;
 end.
-//2485
+{
+}

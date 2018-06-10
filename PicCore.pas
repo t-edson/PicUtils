@@ -44,7 +44,8 @@ type
     add: word;        //Dirección en RAM
     addTRIS: word;    //Dirección de bit de configuración
     bit: byte;        //Bit en RAM
-    bitMask: byte;    //Mácara de bit
+    bitMask: byte;    //Bit mask
+    bitmask2: byte;   //Inverted bit mask
     function GetLabel: string;
   end;
   TPICPinPtr = ^TPICPin;
@@ -189,6 +190,7 @@ type
     procedure SetPin(pNumber: integer; pLabel: string; pType: TPICPinType);
     function SetPinName(strDef: string): boolean;
     procedure GetPinThev(nPin: integer; out vThev, rThev: Single);
+    procedure SetNodePars(nPin: integer; const vNod, rNod: Single);
   public  //RAM name managment
     function NameRAM(const addr: word): string;
     function NameRAMbit(const addr: word; bit: byte): string;
@@ -228,7 +230,7 @@ begin
     //Celda independiente
     Result := Fused;
   end else begin
-    //Celda reflejada. Leemos la disponibilidad, de la celda origen.
+    //Reflected cell. Leemos la disponibilidad, de la celda origen.
     Result := mappedTo^.used;
   end;
 end;
@@ -248,7 +250,7 @@ begin
     //Celda independiente
     Result := Fvalue;
   end else begin
-    //Celda reflejada. Leemos la disponibilidad, de la celda origen.
+    //Reflected cell. Read the value from source.
     Result := mappedTo^.Fvalue;
   end;
 end;
@@ -258,7 +260,7 @@ begin
     //Celda independiente
     Fvalue := AValue;
   end else begin
-    //Celda reflejada. Escribimos la disponibilidad, en la celda origen.
+    //Reflected cell. Write value to target.
     mappedTo^.Fvalue:= AValue;
   end;
 end;
@@ -655,7 +657,8 @@ begin
       bit := bit and %111; //protección
       pines[pin].add := add1;
       pines[pin].bit := bit;
-      pines[pin].bitMask := 1<<bit;  //Calcula mácara para acelerar ejecución
+      pines[pin].bitMask := 1<<bit;        //Calculate mask here, to speed execution
+      pines[pin].bitMask2 := byte(not(1<<bit));  //Inverted mask
       pines[pin].addTRIS := add1+$80;  {Calcula dirección de TRIS. NOTAR que esto solo
                                         es útil para la familia de Rango medio}
       pines[pin].typ := pptPort;
@@ -715,12 +718,9 @@ la fuente (en voltios) y la resistencia interna (en ohmios).
 Hubiera sido más sencillo devolver solo el nivel lógico de salida (alto o bajo),
 pero aquí hemos querido ir un poco más lejos.}
 const
-  VCC   = 5;      //Voltaje de alimentación
-  MAX_I = 0.030;  //Se asume la corriente máxima
-  R_INT: Single = VCC / MAX_I;
-var
-  tris: Byte;
-  //Resistencia interna.
+  VCC   = 5;      //Source voltage
+  MAX_I = 0.030;  //Max assumed current
+  R_INT: Single = VCC / MAX_I;  //Internal resistance
 begin
   if nPin>High(pines) then exit;
   case pines[nPin].typ of
@@ -741,32 +741,53 @@ begin
     rThev := 1e+10;  //Alta impedancia
     //Habría que definir bien este tipo de pines
   end;
-  pptPort: begin  //Puerto de Entrada/Salida
-    //Se supone que está mapeado en RAM
+  pptPort: begin  //Input/Output port.
+    //It's supposed to to bemapped at RAM
     with pines[nPin] do begin
-      //Verifica primero el estado del pin (entrada salida)
-      tris := ram[addTRIS].value;
-      if tris and bitMask = 0 then begin
-        //Es salida
+      //First verify the stae of pin (input/utput)
+      if ram[addTRIS].value and bitMask = 0 then begin
+        //Is output
         if ram[add].value and bitMask = 0 then begin
-          //Bit a 0 lógioc
+          //Bit to 0 logic
           vThev := 0;
           rThev := R_INT;
         end else begin
-          //Bit a 1 lógico. Se asume una corriente máxima de 30mA
+          //Bit to 1 logic.
           vThev := VCC;
           rThev := R_INT;
         end;
       end else begin
-        //Es entrada
+        //In input
         vThev := 0;
-        rThev := 1e+9;  //Alta impednacia
+        rThev := 1e+9;  //High impedance
       end;
     end;
   end;
   else
     vThev := 0;
-    rThev := 1e+10;  //Alta impedancia
+    rThev := 1e+10;  //High impedance
+  end;
+end;
+procedure TPicCore.SetNodePars(nPin: integer; const vNod, rNod: Single);
+{Write the value of voltage and impedance to the physical pin of the device.}
+begin
+  if pines[nPin].typ = pptPort then begin
+    //Only valid for Ports
+    with pines[nPin] do begin
+      //First verify the stae of pin (input/utput)
+      if ram[addTRIS].value and bitMask = 0 then begin
+        //Is output
+        //Doesn't affect in RAM trying to set the voltage of an output pin.
+      end else begin
+        if vNod > 2.5 then begin
+          //Set bit
+          ram[add].value := ram[add].value or bitMask;
+        end else begin
+          //Clear bit
+          ram[add].value := ram[add].value and bitMask2;
+        end;
+      end;
+    end;
   end;
 end;
 function TPicCore.HaveConsecGPR(const i, n: word; maxRam: word): boolean;

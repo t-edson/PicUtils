@@ -575,13 +575,27 @@ begin
   end;
   %000000: begin
     if (codL and %10000000) = %10000000 then begin
+      //Bit 7 is 1
       idIns := i_MOVWF;
       f_ := codL and %01111111;
+    end else if (codL and %11100000) = %00100000 then begin
+      //Bit 7,6,5 = 001
+      idIns := i_MOVLB;
+      k_ := codL and %00011111;
+    end else if (codL and %11111000) = %00010000 then begin
+      //Bit 7,6,5,4,3 = 00010
+      idIns := i_MOVIW;
+      if (codL and %100) = %100 then n_:=1 else n_:=0;
+      m_ := codL and %11;
+    end else if (codL and %11111000) = %00011000 then begin
+      //Bit 7,6,5,4,3 = 00011
+      idIns := i_MOVWI;
+      if (codL and %100) = %100 then n_:=1 else n_:=0;
+      m_ := codL and %11;
     end else begin
-      //bit7 a cero, hay varias opciones
+      //Bit7 is 0, hay varias opciones
       case codL of
       %00000000,
-      %00100000,
       %01000000,
       %01100000: begin
         idIns := i_NOP;
@@ -597,6 +611,15 @@ begin
       end;
       %01100011: begin
         idIns := i_SLEEP;
+      end;
+      %00001011: begin
+        idIns := i_BRW;
+      end;
+      %00001010: begin
+        idIns := i_CALLW;
+      end;
+      %00000001: begin
+        idIns := i_RESET;
       end;
       else
         idIns := i_Inval;
@@ -628,10 +651,22 @@ begin
     d_ := TPIC17destin(codL and %10000000);
     f_ := codL and %01111111;
   end;
-  %111110,
-  %111111: begin
+  %111110: begin
     idIns := i_ADDLW;
     k_ := codL;
+  end;
+  %111111: begin
+    if (codL and %10000000) = %10000000 then begin
+      //Bit 7 is 1
+      idIns := i_MOVWIk;
+      if (codL and %1000000) = %1000000 then n_:=1 else n_:=0;
+      k_ := codL and %111111;
+    end else begin
+      //Bit7 is 0, hay varias opciones
+      idIns := i_MOVIWk;
+      if (codL and %1000000) = %1000000 then n_:=1 else n_:=0;
+      k_ := codL and %111111;
+    end;
   end;
   %111001: begin
     idIns := i_ANDLW;
@@ -641,28 +676,66 @@ begin
     idIns := i_IORLW;
     k_ := codL;
   end;
-  %110000,
-  %110001,
-  %110010,
-  %110011: begin
+  %110000: begin
     idIns := i_MOVLW;
     k_ := codL;
   end;
-  %110100,
-  %110101,
-  %110110,
-  %110111: begin
+  %110001: begin
+    if (codL and %10000000) <> 0 then begin
+      //Bit 7 is 1
+      idIns := i_MOVLP;
+      k_ := codL and %1111111;
+    end else begin
+      //Bit 7 is 0
+      idIns := i_ADDFSR;
+      if (codL and %1000000) = %1000000 then n_:=1 else n_:=0;
+      k_ := codL and %111111;
+    end;
+  end;
+  %110010: begin  //Really %11001X
+    idIns := i_BRA;
+    k_ := codL;
+  end;
+  %110011: begin  //Really %11001X
+    idIns := i_BRA;
+    k_ := $80+codL;
+  end;
+  %110100: begin
     idIns := i_RETLW;
     k_ := codL;
   end;
-  %111100,
-  %111101: begin
+  %110101: begin
+    idIns := i_LSLF;
+    d_ := TPIC17destin(codL and %10000000);
+    f_ := codL and %01111111;
+  end;
+  %110110: begin
+    idIns := i_LSRF;
+    d_ := TPIC17destin(codL and %10000000);
+    f_ := codL and %01111111;
+  end;
+  %110111: begin
+    idIns := i_ASRF;
+    d_ := TPIC17destin(codL and %10000000);
+    f_ := codL and %01111111;
+  end;
+  %111100: begin
     idIns := i_SUBLW;
     k_ := codL;
+  end;
+  %111101: begin
+    idIns := i_ADDWFC;
+    d_ := TPIC17destin(codL and %10000000);
+    f_ := codL and %01111111;
   end;
   %111010: begin
     idIns := i_XORLW;
     k_ := codL;
+  end;
+  %111011: begin
+    idIns := i_SUBWFB;
+    d_ := TPIC17destin(codL and %10000000);
+    f_ := codL and %01111111;
   end;
   else
     if (codH and %110000) = %010000 then begin
