@@ -585,6 +585,11 @@ begin
         MsjError := 'Invalid bank size for this device.';
         exit(false);
       end;
+      if add1 = addTar then begin
+        //Mapped to itself?
+        MsjError := 'Cannot map to the same address.';
+        exit(false);
+      end;
       SetMappRAM(add1, add2, addTar);
     end;
   finally
