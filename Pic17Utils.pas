@@ -93,8 +93,18 @@ type  //Mid-range PIC instructions
   );
 
 const  //Constants of address and bit positions for some registers
+  _INDF0  = $00;
+  _INDF1  = $01;
   _PCL    = $02;
   _STATUS = $03;
+  _FSR0L  = $04;
+  _FSR0H  = $05;
+  _FSR1L  = $06;
+  _FSR1H  = $07;
+  _BSR    = $08;
+  _WREG   = $09;
+  _PCLATH = $0A;
+  _INTCON = $0B;
   _C      = 0;
   _Z      = 2;
 //  _RP0    = 5;
@@ -132,9 +142,9 @@ type
   public  //Campos que modelan a los registros internos
     W        : byte;   //Registro de trabajo
     PC       : TWordRec; //PC as record to fast access for bytes
-    PCLATH   : byte;   //Contador de Programa H
-    STKPTR   : 0..7;   //Puntero de pila
-    STACK    : array[0..7] of word;
+    //PCLATH   : byte;   //Contador de Programa H
+    STKPTR   : 0..15;   //Puntero de pila
+    STACK    : array[0..15] of word;
     property STATUS: byte read GetSTATUS;
     property STATUS_Z: boolean read GetSTATUS_Z write SetSTATUS_Z;
     property STATUS_C: boolean read GetSTATUS_C write SetSTATUS_C;
@@ -479,12 +489,7 @@ begin
   {Se escribe aplicando la máscara de bits implementados. Se podría usra la máscara en
   lectura o escritura, pero se prefiere hacerlo en escritura, porque se espera que se
   hagan menos operaciones de escritura que lectura.}
-  case STATUS and %01100000 of
-  %00000000: pRAM := @ram[f_              ];
-  %00100000: pRAM := @ram[f_+PICBANKSIZE  ];
-  %01000000: pRAM := @ram[f_+PICBANKSIZE*2];
-  %01100000: pRAM := @ram[f_+PICBANKSIZE*3];
-  end;
+  pRAM := @ram[f_+PICBANKSIZE*RAM[_BSR].dvalue];
   pRAM^.value := value and pRAM^.implemAnd; // or pRAM^.implemOr; No se ha encontrado casos  que requieran implemOr
   {Se podría optimizar creando una constante en lugar de PICBANKSIZE y evitar así
   la multiplicación. La constante peude ser glocla, algo así como:
@@ -503,12 +508,7 @@ begin
     end;
     exit;
   end;
-  case STATUS and %01100000 of
-  %00000000: Result := ram[f_               ].value;
-  %00100000: Result := ram[f_+ PICBANKSIZE  ].value;
-  %01000000: Result := ram[f_+ PICBANKSIZE*2].value;
-  %01100000: Result := ram[f_+ PICBANKSIZE*3].value;
-  end;
+  Result := ram[f_+PICBANKSIZE*RAM[_BSR].dvalue].value;
 end;
 procedure TPIC17.Decode(const opCode: word);
 {Decodifica la instrucción indicada. Actualiza siempre la variable "idIns", y
@@ -926,7 +926,9 @@ var
   msk, resNib: byte;
   resByte, bit7, bit0: byte;
   resWord: word;
-  resInt : integer;
+  resInt: integer;
+  Borrow: byte;
+  kSigned: ShortInt;
 begin
   //Decodifica instrucción
   opc := flash[aPC].value;
@@ -1040,8 +1042,8 @@ begin
   end;
   i_MOVWF: begin
     FRAM := W;   //escribe a donde esté mapeado, (si está mapeado)
-    if f_ = $02 then begin //Es el PCL
-      PC.H := PCLATH;  //Cuando se escribe en PCL, se carga PCH con PCLATH
+    if f_ = _PCL then begin //Es el PCL
+      PC.H := ram[_PCLATH].dvalue and $7F;  //Cuando se escribe en PCL, se carga PCH con PCLATH
     end;
   end;
   i_NOP: begin
@@ -1161,7 +1163,7 @@ begin
       STKPTR := STKPTR +1;
     end;
     PC.W := k_;  //Takes the 11 bits from k
-    PC.H := PC.H or (PCLATH and %00011000);  //And complete with bits 3 and 4 of PCLATH
+    PC.H := PC.H or (ram[_PCLATH].dvalue and %01111000);  //And complete with bits 3 and 4 of PCLATH
     Inc(nClck,2);   //This instruction takes two cicles
     exit;
   end;
@@ -1169,7 +1171,7 @@ begin
   end;
   i_GOTO: begin
     PC.W := k_;  //Takes the 11 bits from k
-    PC.H := PC.H or (PCLATH and %00011000);  //And complete with bits 3 and 4 of PCLATH
+    PC.H := PC.H or (ram[_PCLATH].dvalue and %01111000);  //And complete with bits 3 and 4 of PCLATH
     Inc(nClck,2);   //This instruction takes two cicles
     exit;
   end;
@@ -1240,6 +1242,319 @@ begin
   end;
   i_Inval: begin
     MsjError := 'Invalid Opcode';
+  end;
+  //NEW INSTRUCTIONS
+  i_ADDWFC: begin
+    resByte := FRAM;
+    if STATUS_C then resWord := W + resByte + 1 else resWord := W + resByte;
+    resNib := (W and $0F) + (resByte and $0F);
+    if d_ = toF then begin
+      FRAM := resWord and $FF;
+    end else begin  //toW
+      w := resWord and $FF;
+    end;
+    STATUS_Z := (resWord and $ff) = 0;
+    STATUS_C := (resWord > 255);
+    STATUS_DC := (resNib > 15);
+  end;
+  i_SUBWFB: begin
+    resByte := FRAM;
+    if STATUS_C then Borrow := 0 else Borrow := 1;;
+    resInt := resByte - W - Borrow;
+    if d_ = toF then begin
+      FRAM :=  resInt and $FF;
+    end else begin  //toW
+      w := resInt and $FF;
+    end;
+    STATUS_Z := (resInt = 0);
+    if resInt < 0 then STATUS_C := false   //negativo
+    else STATUS_C := true;
+    //Update STATUS_DC
+    resInt := (resByte and $0F) - (W and $0F) - Borrow;
+    if resInt < 0 then STATUS_DC := false   //negativo
+    else STATUS_DC := true;
+  end;
+  i_LSLF  : begin
+    resByte := FRAM;
+    bit7 := resByte and $80; //guarda bit 7
+    resByte := (resByte << 1) and $ff;  //Shift
+    //Update C
+    if bit7 = 0 then STATUS_C := false
+                else STATUS_C := true;
+    if d_ = toF then begin
+      FRAM := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+  end;
+  i_LSRF  : begin
+    resByte := FRAM;
+    bit0 := resByte and $01; //guarda bit 0
+    resByte := resByte >> 1;  //desplaza
+    //Update C
+    if bit0 = 0 then STATUS_C := false
+                else STATUS_C := true;
+    if d_ = toF then begin
+      FRAM := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+  end;
+  i_ASRF  : begin
+    resByte := FRAM;
+    bit0 := resByte and $01; //Save bit 0
+    bit7 := resByte and $80; //Save bit 7
+    resByte := resByte >> 1;  //desplaza
+    //Restore bit7 in MSb
+    resByte := resByte or bit7;
+    //Update C
+    if bit0 = 0 then STATUS_C := false
+                else STATUS_C := true;
+    if d_ = toF then begin
+      FRAM := resByte;
+    end else begin  //toW
+      w := resByte;
+    end;
+  end;
+  i_MOVLP : begin
+    ram[_PCLATH].dvalue := k_;
+  end;
+  i_MOVLB : begin
+    ram[_BSR].dvalue := k_;
+  end;
+  i_BRA   : begin
+    PC.W := PC.W + k_;  //Add
+    PC.H := PC.H and %1111111;  //Clear bit7
+    Inc(nClck,2);   //This instruction takes two cicles
+    exit;
+  end;
+  i_BRW   : begin
+    PC.W := PC.W + W;  //Add
+    PC.H := PC.H and %1111111;  //Clear bit7
+    Inc(nClck,2);   //This instruction takes two cicles
+    exit;
+  end;
+  i_CALLW : begin
+    //Guarda dirección en Pila
+    STACK[STKPTR] := PC.W;
+    if STKPTR = 15 then begin
+      //Desborde de pila
+      STKPTR := 0;
+      if OnExecutionMsg<>nil then OnExecutionMsg('Stack Overflow on CALL OpCode at $' + IntToHex(aPC,4));
+    end else begin
+      STKPTR := STKPTR +1;
+    end;
+    PC.L := W;  //Takes the 11 bits from k
+    PC.H := ram[_PCLATH].dvalue and $7F;  //Cuando se escribe en PCL, se carga PCH con PCLATH
+    Inc(nClck,2);   //This instruction takes two cicles
+    exit;
+  end;
+  i_ADDFSR: begin
+    if k_ > 31 then kSigned := 31 - k_ else kSigned := k_;  //Convert to signed
+    if n_ = 0 then begin
+      resInt := ram[_FSR0L].dvalue + 256 * ram[_FSR0H].dvalue + kSigned;
+      resWord := resInt and $FFFF; //convert to positive
+      ram[_FSR0L].dvalue := lo(resWord);
+      ram[_FSR0H].dvalue := hi(resWord);
+    end else begin  //n = 1
+      resInt := ram[_FSR1L].dvalue + 256 * ram[_FSR1H].dvalue + kSigned;
+      resWord := resInt and $FFFF; //convert to positive
+      ram[_FSR1L].dvalue := lo(resWord);
+      ram[_FSR1H].dvalue := hi(resWord);
+    end;
+  end;
+  i_MOVIW : begin
+    if n_ = 0 then begin
+      resWord := ram[_FSR0L].dvalue + 256 * ram[_FSR0H].dvalue;
+      case m_ of
+      00: begin //++FSR
+        resWord := (resWord+1) and $FFFF;
+        w := ram[resWord].dvalue;
+      end;
+      01: begin  //--FSR
+        resWord := (resWord-1) and $FFFF;
+        w := ram[resWord].dvalue;
+      end;
+      02: begin //FSR++
+        w := ram[resWord].dvalue;
+        resWord := (resWord+1) and $FFFF;
+      end;
+      03: begin  //FSR--
+        w := ram[resWord].dvalue;
+        resWord := (resWord-1) and $FFFF;
+      end;
+      end;
+      ram[_FSR0L].dvalue := lo(resWord);
+      ram[_FSR0H].dvalue := hi(resWord);
+    end else begin  //n = 1
+      resWord := ram[_FSR1L].dvalue + 256 * ram[_FSR1H].dvalue;
+      case m_ of
+      00: begin //++FSR
+        resWord := (resWord+1) and $FFFF;
+        w := ram[resWord].dvalue;
+      end;
+      01: begin  //--FSR
+        resWord := (resWord-1) and $FFFF;
+        w := ram[resWord].dvalue;
+      end;
+      02: begin //FSR++
+        w := ram[resWord].dvalue;
+        resWord := (resWord+1) and $FFFF;
+      end;
+      03: begin  //FSR--
+        w := ram[resWord].dvalue;
+        resWord := (resWord-1) and $FFFF;
+      end;
+      end;
+      ram[_FSR1L].dvalue := lo(resWord);
+      ram[_FSR1H].dvalue := hi(resWord);
+    end;
+  end;
+  i_MOVIWk: begin
+    if k_ > 31 then kSigned := 31 - k_ else kSigned := k_;  //Convert to signed
+    if n_ = 0 then begin
+      resWord := ram[_FSR0L].dvalue + 256 * ram[_FSR0H].dvalue;
+      case m_ of
+      00: begin //++FSR
+        resWord := (resWord+kSigned) and $FFFF;
+        w := ram[resWord].dvalue;
+      end;
+      01: begin  //--FSR
+        resWord := (resWord-kSigned) and $FFFF;
+        w := ram[resWord].dvalue;
+      end;
+      02: begin //FSR++
+        w := ram[resWord].dvalue;
+        resWord := (resWord+kSigned) and $FFFF;
+      end;
+      03: begin  //FSR--
+        w := ram[resWord].dvalue;
+        resWord := (resWord-kSigned) and $FFFF;
+      end;
+      end;
+      ram[_FSR0L].dvalue := lo(resWord);
+      ram[_FSR0H].dvalue := hi(resWord);
+    end else begin  //n = 1
+      resWord := ram[_FSR1L].dvalue + 256 * ram[_FSR1H].dvalue;
+      case m_ of
+      00: begin //++FSR
+        resWord := (resWord+kSigned) and $FFFF;
+        w := ram[resWord].dvalue;
+      end;
+      01: begin  //--FSR
+        resWord := (resWord-kSigned) and $FFFF;
+        w := ram[resWord].dvalue;
+      end;
+      02: begin //FSR++
+        w := ram[resWord].dvalue;
+        resWord := (resWord+kSigned) and $FFFF;
+      end;
+      03: begin  //FSR--
+        w := ram[resWord].dvalue;
+        resWord := (resWord-kSigned) and $FFFF;
+      end;
+      end;
+      ram[_FSR1L].dvalue := lo(resWord);
+      ram[_FSR1H].dvalue := hi(resWord);
+    end;
+  end;
+  i_MOVWI : begin
+    if n_ = 0 then begin
+      resWord := ram[_FSR0L].dvalue + 256 * ram[_FSR0H].dvalue;
+      case m_ of
+      00: begin //++FSR
+        resWord := (resWord+1) and $FFFF;
+        ram[resWord].dvalue := w;
+      end;
+      01: begin  //--FSR
+        resWord := (resWord-1) and $FFFF;
+        ram[resWord].dvalue := w;
+      end;
+      02: begin //FSR++
+        ram[resWord].dvalue := w;
+        resWord := (resWord+1) and $FFFF;
+      end;
+      03: begin  //FSR--
+        ram[resWord].dvalue := w;
+        resWord := (resWord-1) and $FFFF;
+      end;
+      end;
+      ram[_FSR0L].dvalue := lo(resWord);
+      ram[_FSR0H].dvalue := hi(resWord);
+    end else begin  //n = 1
+      resWord := ram[_FSR1L].dvalue + 256 * ram[_FSR1H].dvalue;
+      case m_ of
+      00: begin //++FSR
+        resWord := (resWord+1) and $FFFF;
+        ram[resWord].dvalue := w;
+      end;
+      01: begin  //--FSR
+        resWord := (resWord-1) and $FFFF;
+        ram[resWord].dvalue := w;
+      end;
+      02: begin //FSR++
+        ram[resWord].dvalue := w;
+        resWord := (resWord+1) and $FFFF;
+      end;
+      03: begin  //FSR--
+        ram[resWord].dvalue := w;
+        resWord := (resWord-1) and $FFFF;
+      end;
+      end;
+      ram[_FSR1L].dvalue := lo(resWord);
+      ram[_FSR1H].dvalue := hi(resWord);
+    end;
+  end;
+  i_MOVWIk: begin
+    if k_ > 31 then kSigned := 31 - k_ else kSigned := k_;  //Convert to signed
+    if n_ = 0 then begin
+      resWord := ram[_FSR0L].dvalue + 256 * ram[_FSR0H].dvalue;
+      case m_ of
+      00: begin //++FSR
+        resWord := (resWord+kSigned) and $FFFF;
+        ram[resWord].dvalue := w;
+      end;
+      01: begin  //--FSR
+        resWord := (resWord-kSigned) and $FFFF;
+        ram[resWord].dvalue := w;
+      end;
+      02: begin //FSR++
+        ram[resWord].dvalue := w;
+        resWord := (resWord+kSigned) and $FFFF;
+      end;
+      03: begin  //FSR--
+        ram[resWord].dvalue := w;
+        resWord := (resWord-kSigned) and $FFFF;
+      end;
+      end;
+      ram[_FSR0L].dvalue := lo(resWord);
+      ram[_FSR0H].dvalue := hi(resWord);
+    end else begin  //n = 1
+      resWord := ram[_FSR1L].dvalue + 256 * ram[_FSR1H].dvalue;
+      case m_ of
+      00: begin //++FSR
+        resWord := (resWord+kSigned) and $FFFF;
+        ram[resWord].dvalue := w;
+      end;
+      01: begin  //--FSR
+        resWord := (resWord-kSigned) and $FFFF;
+        ram[resWord].dvalue := w;
+      end;
+      02: begin //FSR++
+        ram[resWord].dvalue := w;
+        resWord := (resWord+kSigned) and $FFFF;
+      end;
+      03: begin  //FSR--
+        ram[resWord].dvalue := w;
+        resWord := (resWord-kSigned) and $FFFF;
+      end;
+      end;
+      ram[_FSR1L].dvalue := lo(resWord);
+      ram[_FSR1H].dvalue := hi(resWord);
+    end;
+  end;
+  i_RESET : begin
+    Reset;
   end;
   end;
   //Incrementa contador
@@ -1327,7 +1642,7 @@ var
   i: Integer;
 begin
   PC.W   := 0;
-  PCLATH := 0;
+  ram[_PCLATH].dvalue := 0;
   W      := 0;
   STKPTR := 0;   //Posición inicial del puntero de pila
   nClck  := 0;   //Inicia contador de ciclos
@@ -1626,9 +1941,9 @@ constructor TPIC17.Create;
 begin
   inherited Create;
   PICBANKSIZE := 128;     //RAM bank size
-  PICMAXRAM   := PICBANKSIZE * 4; //Máx RAM memory (4 banks)
+  PICMAXRAM   := PICBANKSIZE * 32; //Máx RAM memory (32 banks)
   PICPAGESIZE := 2048;
-  PICMAXFLASH := PICPAGESIZE * 4; //Máx Flash memeory (4 pages)
+  PICMAXFLASH := PICPAGESIZE * 16; //Máx Flash memeory (16 pages)
   SetLength(ram, PICMAXRAM);
   SetLength(flash, PICMAXFLASH);
   //Default hardware settings
