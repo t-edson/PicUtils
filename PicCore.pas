@@ -969,7 +969,11 @@ procedure TPicCore.SetNameRAM(const addr: word; const nam: string
   );
 {Escribe en el campo "name" de la RAM en la psoición indicada}
 begin
-   ram[addr].name:=nam;
+  if addr > high(ram) then begin
+    MsjError := 'Address exceed limits of this device.';
+    exit;
+  end;
+  ram[addr].name:=nam;
 end;
 procedure TPicCore.AddNameRAM(const addr: word; const nam: string);
 {Escribe en el campo "name" de la RAM en la psoición indicada. Si ya existía un nombre,
@@ -984,6 +988,10 @@ end;
 procedure TPicCore.SetNameRAMbit(const addr: word; const bit: byte; const nam: string);
 begin
   if (bit>7) then exit;
+  if addr > high(ram) then begin
+    MsjError := 'Address exceed limits of this device.';
+    exit;
+  end;
   ram[addr].bitname[bit] := nam;
 end;
 //Execution control
