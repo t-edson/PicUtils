@@ -1318,6 +1318,7 @@ var
 begin
   Result := 0;
   for i := 0 to word(NumBanks * PICBANKSIZE) - 1 do begin
+    if i > high(ram) then exit;  //Protection
     if ram[i].AvailGPR then begin
       Result := Result + 1;
     end;
@@ -1330,6 +1331,7 @@ var
 begin
   Result := 0;
   for i := 0 to word(NumBanks * PICBANKSIZE) - 1 do begin
+    if i > high(ram) then exit;  //Protection
     if ram[i].AvailGPR and (ram[i].used <> 0) then begin
       //Notar que "AvailGPR" asegura que no se consideran registros maepados
       Result := Result + 1;
@@ -1342,6 +1344,7 @@ var
   i: Integer;
 begin
   for i := 0 to word(NumBanks * PICBANKSIZE) - 1 do begin
+    if i > high(ram) then exit;  //Protection
     if ram[i].AvailGPR and (ram[i].used <> 0) then begin
       rutExplorRAM(i, 0, @ram[i]);
     end;

@@ -133,6 +133,7 @@ type
   private
     FMaxFlash: integer;
     procedure SetMaxFlash(AValue: integer);
+    function GetTokAddress(var str: string; delimiter: char): word;
   public   //Limits
     {This variables are set just one time. So they work as constant.}
     PICBANKSIZE : word;
@@ -285,6 +286,30 @@ begin
   if FMaxFlash = AValue then Exit;
   FMaxFlash := AValue;
 end;
+function TPicCore.GetTokAddress(var str: string; delimiter: char): word;
+{Extract a number (address) from a string and delete until de delimiter.
+If fail update the variable "MsjError".}
+var
+  p: SizeInt;
+  n: Longint;
+begin
+  p := pos(delimiter, str);
+  if p = 0 then begin
+    MsjError := 'Expected "'+delimiter+'".';
+    exit;
+  end;
+  //Have delimiter. Get number
+  if not TryStrToInt('$'+copy(str,1,p-1), n) then begin
+    MsjError := 'Wrong address.';
+    exit;
+  end;
+  delete(str, 1, p);  //delete number and delimiter
+  if n<0 then begin
+    MsjError := 'Address cannot be negative.';
+    exit;
+  end;
+  Result := n;
+end;
 //Creación de archivo *.hex
 function TPicCore.HexChecksum(const lin:string): string;
 //Devuelve los caracteres en hexadecimal del Checksum, para el archivo *.hex
@@ -428,7 +453,8 @@ var
   coms: TStringList;
   add1, add2: longint;
   state: TPICCellState;
-  staMem, com, str: String;
+  com, str: String;
+  bnkTar: Byte;
 begin
   Result := true;
   coms:= TStringList.Create;
@@ -438,38 +464,76 @@ begin
     for str in coms do begin
       com := UpCase(trim(str));
       if com='' then continue;
-      if length(com)<>11 then begin
-        MsjError := 'Memory definition syntax error: Bad string size.';
+      //Find Address1
+      add1 := GetTokAddress(com, '-');
+      if MsjError<>'' then begin
+        MsjError := 'Memory definition syntax error: ' + MsjError;
         exit(false);
       end;
-      if com[4] <> '-' then begin
-        MsjError := 'Memory definition syntax error: Expected "-".';
+      //Find Address1
+      add2 := GetTokAddress(com, ':');
+      if MsjError<>'' then begin
+        MsjError := 'Memory definition syntax error: ' + MsjError;
         exit(false);
       end;
-      if com[8] <> ':' then begin
-        MsjError := 'Memory definition syntax error: Expected ":".';
-        exit(false);
-      end;
-      //Debe tener el formato pedido
-      if not TryStrToInt('$'+copy(com,1,3), add1) then begin
-        MsjError := 'Memory definition syntax error: Wrong address.';
-        exit(false);
-      end;
-      if not TryStrToInt('$'+copy(com,5,3), add2) then begin
-        MsjError := 'Memory definition syntax error: Wrong address.';
-        exit(false);
-      end;
-      staMem := copy(com, 9, 3);
-      case staMem of
+      case copy(com,1,3) of
       'SFR': state := cs_impleSFR;
       'GPR': state := cs_impleGPR;
       'NIM': state := cs_unimplem;
       else
-        MsjError := 'Memory definition syntax error: Expected SFR or GPR';
+        MsjError := 'Memory definition syntax error: Expected SFR, GPR or NIM';
         exit(false);
       end;
       //Ya se tienen los parámetros, para definir la memoria
       SetStatRAM(add1, add2, state);
+      //Verifica si hay parámetros adicionales
+      delete(com, 1, 3);
+      if com='' then begin
+        //No hay
+      end else if com=':ALL' then begin
+        //Set the state for all Banks
+        if PICBANKSIZE = $80 then begin //14 bits instructions PIC
+          add1 := add1 and $7F;  //Fix to bank0
+          add2 := add2 and $7F;  //Fix to bank0
+          for bnkTar:=0 to NumBanks do begin
+            SetStatRAM($080*bnkTar+add1, $080*bnkTar+add2, state);
+          end;
+        end else if PICBANKSIZE = $20 then begin //12 bits instructions PIC
+          add1 := add1 and $1F;  //Fix to bank0
+          add2 := add2 and $1F;  //Fix to bank0
+          for bnkTar:=0 to NumBanks do begin
+            SetStatRAM($020*bnkTar+add1, $020*bnkTar+add2, state);
+          end;
+        end;
+      end else if com=':ALLMAPPED' then begin
+        //Mapp all banks to the bank0
+        if PICBANKSIZE = $80 then begin //14 bits instructions PIC
+          add1 := add1 and $7F;  //Fix to bank0
+          add2 := add2 and $7F;  //Fix to bank0
+          //State
+          for bnkTar:=0 to NumBanks do begin
+            SetStatRAM($080*bnkTar+add1, $080*bnkTar+add2, state);
+          end;
+          //Map
+          for bnkTar:=1 to NumBanks do begin
+            SetMappRAM($080*bnkTar+add1, $080*bnkTar+add2, add1);
+          end;
+        end else if PICBANKSIZE = $20 then begin //12 bits instructions PIC
+          add1 := add1 and $1F;  //Fix to bank0
+          add2 := add2 and $1F;  //Fix to bank0
+          //State
+          for bnkTar:=0 to NumBanks do begin
+            SetStatRAM($020*bnkTar+add1, $020*bnkTar+add2, state);
+          end;
+          //Map
+          for bnkTar:=1 to NumBanks do begin
+            SetMappRAM($020*bnkTar+add1, $020*bnkTar+add2, add1);
+          end;
+        end;
+      end else begin
+        MsjError := 'Memory definition error';
+        exit(false);
+      end;
     end;
   finally
     coms.Destroy;
@@ -499,29 +563,19 @@ begin
     for str in coms do begin
       com := UpCase(trim(str));
       if com='' then continue;
-      if length(com)<>12 then begin
-        MsjError := 'Memory mapping syntax error: Bad string size.';
+      //Find Address1
+      add1 := GetTokAddress(com, '-');
+      if MsjError<>'' then begin
+        MsjError := 'Memory mapping syntax error: ' + MsjError;
         exit(false);
       end;
-      if com[4] <> '-' then begin
-        MsjError := 'Memory mapping syntax error: Expected "-".';
+      //Find Address1
+      add2 := GetTokAddress(com, ':');
+      if MsjError<>'' then begin
+        MsjError := 'Memory mapping syntax error: ' + MsjError;
         exit(false);
       end;
-      if com[8] <> ':' then begin
-        MsjError := 'Memory mapping syntax error: Expected ":".';
-        exit(false);
-      end;
-      //Debe tener el formato pedido
-//      debugln(com);
-      if not TryStrToInt('$'+copy(com,1,3), add1) then begin
-        MsjError := 'Memory mapping syntax error: Wrong address.';
-        exit(false);
-      end;
-      if not TryStrToInt('$'+copy(com,5,3), add2) then begin
-        MsjError := 'Memory mapping syntax error: Wrong address.';
-        exit(false);
-      end;
-      bnkTarStr := copy(com, 9, 4);
+      bnkTarStr := com;
       if copy(bnkTarStr,1,3)<>'BNK' then begin
         MsjError := 'Memory mapping syntax error: Expected "bnk0", ...';
         exit(false);
@@ -534,53 +588,10 @@ begin
       //We already have the parameters to set the mapping
       if PICBANKSIZE = $80 then begin
         //This apply for 14 bits instructions PIC
-        case bnkTar of
-        0:  addTar := (add1 and $7F);
-        1:  addTar := (add1 and $7F) or $080;
-        2:  addTar := (add1 and $7F) or $100;
-        3:  addTar := (add1 and $7F) or $180;
-        //Enhaced PICs have until 32 banks
-        4:  addTar := (add1 and $7F) or $200;
-        5:  addTar := (add1 and $7F) or $280;
-        6:  addTar := (add1 and $7F) or $300;
-        7:  addTar := (add1 and $7F) or $380;
-        8:  addTar := (add1 and $7F) or $400;
-        9:  addTar := (add1 and $7F) or $480;
-        10: addTar := (add1 and $7F) or $500;
-        11: addTar := (add1 and $7F) or $580;
-        12: addTar := (add1 and $7F) or $600;
-        13: addTar := (add1 and $7F) or $680;
-        14: addTar := (add1 and $7F) or $700;
-        15: addTar := (add1 and $7F) or $780;
-        16: addTar := (add1 and $7F) or $800;
-        17: addTar := (add1 and $7F) or $880;
-        18: addTar := (add1 and $7F) or $900;
-        19: addTar := (add1 and $7F) or $980;
-        20: addTar := (add1 and $7F) or $A00;
-        21: addTar := (add1 and $7F) or $A80;
-        22: addTar := (add1 and $7F) or $B00;
-        23: addTar := (add1 and $7F) or $B80;
-        24: addTar := (add1 and $7F) or $C00;
-        25: addTar := (add1 and $7F) or $C80;
-        26: addTar := (add1 and $7F) or $D00;
-        27: addTar := (add1 and $7F) or $D80;
-        28: addTar := (add1 and $7F) or $E00;
-        29: addTar := (add1 and $7F) or $E80;
-        30: addTar := (add1 and $7F) or $F00;
-        31: addTar := (add1 and $7F) or $F80;
-        end;
+        addTar := (add1 and $7F) + $080*bnkTar;
       end else if PICBANKSIZE = $20 then begin
         //This apply for 12 bits instructions PIC
-        case bnkTar of
-        0: addTar := (add1 and $1F);
-        1: addTar := (add1 and $1F) or $020;
-        2: addTar := (add1 and $1F) or $040;
-        3: addTar := (add1 and $1F) or $060;
-        4: addTar := (add1 and $1F) or $080;
-        5: addTar := (add1 and $1F) or $0A0;
-        6: addTar := (add1 and $1F) or $0C0;
-        7: addTar := (add1 and $1F) or $0E0;
-        end;
+        addTar := (add1 and $1F) or $020*bnkTar;
       end else begin
         MsjError := 'Invalid bank size for this device.';
         exit(false);
@@ -876,30 +887,22 @@ begin
     for str in coms do begin
       com := UpCase(trim(str));
       if com='' then continue;
-      if length(com)<>6 then begin
-        MsjError := 'Syntax error: Expected "$$$:$$".';
-        exit(false);
-      end;
-      if com[4] <> ':' then begin
-        MsjError := 'Syntax error: Expected ":".';
-        exit(false);
-      end;
-      //Debe tener el formato pedido
-//      debugln(com);
-      if not TryStrToInt('$'+copy(com,1,3), add1) then begin
-        MsjError := 'Syntax error: Wrong address.';
+      //Find Address1
+      add1 := GetTokAddress(com, ':');
+      if MsjError<>'' then begin
+        MsjError := 'Syntax error: ' + MsjError;
         exit(false);
       end;
       if add1>high(ram) then begin
-        MsjError := 'Syntax error: Wrong address.';
+        MsjError := 'Address exceeds limit for this device.';
         exit(false);
       end;
-      mskBits := copy(com, 5, 2);
+      mskBits := com;
       if not TryStrToInt('$'+mskBits, n) then begin
         MsjError := 'Syntax error: Wrong mask.';
         exit(false);
       end;
-      mskBitsN := n;  //Se supone que nunca será > 255
+      mskBitsN := n and $FF;  //Se supone que nunca será > 255
       //Ya se tienen los parámetros, para definir el mapeo
       ram[add1].implemAnd := mskBitsN;
     end;
@@ -928,31 +931,22 @@ begin
     coms.DelimitedText := strDef;
     for str in coms do begin
       com := UpCase(trim(str));
-      if com='' then continue;
-      if length(com)<>6 then begin
-        MsjError := 'Syntax error: Expected "$$$:$$".';
-        exit(false);
-      end;
-      if com[4] <> ':' then begin
-        MsjError := 'Syntax error: Expected ":".';
-        exit(false);
-      end;
-      //Debe tener el formato pedido
-//      debugln(com);
-      if not TryStrToInt('$'+copy(com,1,3), add1) then begin
-        MsjError := 'Syntax error: Wrong address.';
+      //Find Address1
+      add1 := GetTokAddress(com, ':');
+      if MsjError<>'' then begin
+        MsjError := 'Syntax error: ' + MsjError;
         exit(false);
       end;
       if add1>high(ram) then begin
-        MsjError := 'Syntax error: Wrong address.';
+        MsjError := 'Address exceeds limit for this device.';
         exit(false);
       end;
-      mskBits := copy(com, 5, 2);
+      mskBits := com;
       if not TryStrToInt('$'+mskBits, n) then begin
         MsjError := 'Syntax error: Wrong mask.';
         exit(false);
       end;
-      mskBitsN := n;  //Se supone que nunca será > 255
+      mskBitsN := n and $FF;  //Se supone que nunca será > 255
       //Ya se tienen los parámetros, para definir el mapeo
       ram[add1].implemOr := mskBitsN;
     end;

@@ -1,3 +1,9 @@
+1.6
+===
+Se aumenta la cantidad máxima de bancos para los PIC de gama media mejorada a 64.
+Se modifica las funciones que definen el estado y el mapeo de la RAM, para que 
+acepten direcciones mayores a 4K.
+
 1.5
 ===
 Se actualiza la unidad Pic10Devices para que incluya PICs de la serie 10F.

@@ -107,9 +107,6 @@ const  //Constants of address and bit positions for some registers
   _INTCON = $0B;
   _C      = 0;
   _Z      = 2;
-//  _RP0    = 5;
-//  _RP1    = 6;
-//  _IRP   = 7;
 type
   {Objeto que representa al hardware de un PIC de la serie 16}
   { TPIC17 }
@@ -1941,7 +1938,7 @@ constructor TPIC17.Create;
 begin
   inherited Create;
   PICBANKSIZE := 128;     //RAM bank size
-  PICMAXRAM   := PICBANKSIZE * 32; //Máx RAM memory (32 banks)
+  PICMAXRAM   := PICBANKSIZE * 64; //Máx RAM memory (64 banks)
   PICPAGESIZE := 2048;
   PICMAXFLASH := PICPAGESIZE * 16; //Máx Flash memeory (16 pages)
   SetLength(ram, PICMAXRAM);
