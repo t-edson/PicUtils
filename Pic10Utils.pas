@@ -1019,7 +1019,7 @@ begin
   end;
   i_SWAPF: begin
     resByte := FRAM;
-    FRAM := (resByte >> 4) or (resByte << 4);
+    FRAM := (resByte >> 4) or ((resByte << 4) and $FF);
   end;
   i_XORWF: begin
     resByte := W xor FRAM;
@@ -1232,7 +1232,7 @@ begin
     end;
   end;
   stopped := false;
-  consoleTickCount('');
+//  consoleTickCount('');
 end;
 procedure TPIC10.Reset;
 //Reinicia el dipsoitivo

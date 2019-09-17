@@ -3,6 +3,7 @@
 Se aumenta la cantidad máxima de bancos para los PIC de gama media mejorada a 64.
 Se modifica las funciones que definen el estado y el mapeo de la RAM, para que 
 acepten direcciones mayores a 4K.
+Se incluye el desensamblado de la instrucción MOVLB.
 
 1.5
 ===

@@ -965,7 +965,7 @@ begin
   end;
   i_SWAPF: begin
     resByte := FRAM;
-    FRAM := (resByte >> 4) or (resByte << 4);
+    FRAM := (resByte >> 4) or ((resByte << 4) and $FF);
   end;
   i_XORWF: begin
     resByte := W xor FRAM;

@@ -308,6 +308,10 @@ begin
     MsjError := 'Address cannot be negative.';
     exit;
   end;
+  if n>$FFFF then begin
+    MsjError := 'Address cannot be greater than $FFFF.';
+    exit(0);
+  end;
   Result := n;
 end;
 //Creación de archivo *.hex
@@ -514,7 +518,7 @@ begin
           for bnkTar:=0 to NumBanks do begin
             SetStatRAM($080*bnkTar+add1, $080*bnkTar+add2, state);
           end;
-          //Map
+          //Map from bank1
           for bnkTar:=1 to NumBanks do begin
             SetMappRAM($080*bnkTar+add1, $080*bnkTar+add2, add1);
           end;
@@ -525,7 +529,7 @@ begin
           for bnkTar:=0 to NumBanks do begin
             SetStatRAM($020*bnkTar+add1, $020*bnkTar+add2, state);
           end;
-          //Map
+          //Map from bank1
           for bnkTar:=1 to NumBanks do begin
             SetMappRAM($020*bnkTar+add1, $020*bnkTar+add2, add1);
           end;

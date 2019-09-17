@@ -489,7 +489,7 @@ begin
   pRAM := @ram[f_+PICBANKSIZE*RAM[_BSR].dvalue];
   pRAM^.value := value and pRAM^.implemAnd; // or pRAM^.implemOr; No se ha encontrado casos  que requieran implemOr
   {Se podría optimizar creando una constante en lugar de PICBANKSIZE y evitar así
-  la multiplicación. La constante peude ser glocla, algo así como:
+  la multiplicación. La constante puEde ser glocla, algo así como:
   cons PIC_BANK_SIZE = 128 y usar luego esta constante para asiganrla a PICBANKSIZE.}
 end;
 function TPIC17.GetFRAM: byte;
@@ -843,7 +843,10 @@ begin
         end else begin
           Result := nemo + '0x'+IntToHex(f,3);
         end;
-     end;
+    end;
+  i_MOVLB: begin
+      Result := nemo + '0x'+IntToHex(k_,2);
+    end;
   i_BCF,
   i_BSF,
   i_BTFSC,
@@ -874,8 +877,8 @@ begin
   i_RETLW,
   i_SUBLW,
   i_XORLW: begin
-       Result := nemo + '0x'+IntToHex(k_,2);
-     end;
+      Result := nemo + '0x'+IntToHex(k_,2);
+    end;
   i_CALL,
   i_GOTO: begin   //Faltaría decodificar la dirección
     Result := nemo + '0x'+IntToHex(k_,3);
@@ -1100,7 +1103,7 @@ begin
   end;
   i_SWAPF: begin
     resByte := FRAM;
-    FRAM := (resByte >> 4) or (resByte << 4);
+    FRAM := (resByte >> 4) or ((resByte << 4) and $FF);
   end;
   i_XORWF: begin
     resByte := W xor FRAM;
