@@ -703,7 +703,7 @@ begin
           //Se asume un banco desconocido
           useVarName := false;  //Desactiva por si acaso
           bankNum := 0;  //Trabajará en este banco
-          f := f;        //Dirección asumida
+          f := f_;        //Dirección asumida
         end;
         if useVarName and (ram[f].name<>'') then begin
           Result := nemo + ram[f].name;
